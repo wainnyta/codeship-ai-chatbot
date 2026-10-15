@@ -28,9 +28,7 @@
       "apiKeyEnvVar": "ANTHROPIC_API_KEY",
       "$providerOptionsComment": "Thinking cannot be disabled on this model and defaults to medium effort. Left alone, a thinking pause precedes the first visible token, which undercuts word-by-word streaming (R1). This workload is short extraction over passages already in the prompt, so low effort is correct.",
       "providerOptions": {
-        "anthropic": {
-          "output_config": { "effort": "low" }
-        }
+        "anthropic": { "effort": "low" }
       }
     },
     {
