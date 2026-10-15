@@ -1,49 +1,611 @@
+/*
+ * NimbusStack Product Assistant
+ *
+ * Design intent: a reference instrument, not a chat toy. The user is mid-call and
+ * deciding whether to repeat a number to a customer, so evidence sits beside the
+ * answer rather than behind a disclosure control.
+ *
+ * Type carries provenance: serif for generated prose, mono for verbatim document
+ * passages (which keeps the corpus's pipe tables aligned), sans for chrome.
+ * Colour carries state: teal cited, amber disagreement, rust incomplete.
+ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+  --paper: #f7f8fa;
+  --surface: #ffffff;
+  --ink: #151d2a;
+  --slate: #5a6678;
+  --rule: #dde2e9;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+  --cite: #0e6e62;
+  --cite-wash: #e9f3f1;
+  --conflict: #9c5a0b;
+  --conflict-wash: #fdf3e2;
+  --fault: #8f3729;
+  --fault-wash: #fbeeeb;
 
-html {
-  height: 100%;
-}
+  --sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --serif: var(--font-plex-serif), Georgia, serif;
+  --mono: var(--font-plex-mono), ui-monospace, "SF Mono", monospace;
 
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
-}
-
-body {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  --measure: 68ch;
+  --radius: 3px;
 }
 
 * {
   box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
   padding: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+select,
+textarea,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--cite);
+  outline-offset: 2px;
+}
+
+/* ---------- shell ---------- */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  max-width: 1040px;
+  margin: 0 auto;
+  background: var(--surface);
+  border-inline: 1px solid var(--rule);
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--rule);
+  flex-wrap: wrap;
+}
+
+.wordmark {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-right: auto;
+}
+
+.wordmark span {
+  color: var(--slate);
+  font-weight: 400;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ghost-button {
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 7px 12px;
+  cursor: pointer;
+  color: var(--slate);
+}
+
+.ghost-button:hover:not(:disabled) {
+  border-color: var(--slate);
+  color: var(--ink);
+}
+
+.ghost-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ---------- model picker ---------- */
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.picker select {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.picker-note {
+  font-size: 12px;
+  color: var(--slate);
+  max-width: 44ch;
+}
+
+/* ---------- transcript ---------- */
+
+.transcript {
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px 24px 8px;
+  scroll-behavior: smooth;
+}
+
+.turn + .turn {
+  margin-top: 30px;
+}
+
+.question {
+  font-family: var(--serif);
+  font-size: 19px;
+  line-height: 1.4;
+  max-width: var(--measure);
+  padding-left: 14px;
+  border-left: 3px solid var(--ink);
+}
+
+.answer {
+  margin-top: 14px;
+}
+
+.answer-body {
+  font-family: var(--serif);
+  font-size: 16.5px;
+  line-height: 1.62;
+  max-width: var(--measure);
+}
+
+.answer-body p {
+  margin: 0 0 0.75em;
+}
+
+.answer-body ul {
+  margin: 0 0 0.75em;
+  padding-left: 1.1em;
+}
+
+.answer-body li {
+  margin-bottom: 0.3em;
+}
+
+.answer-body strong {
+  font-weight: 600;
+}
+
+.answer-body code {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 0 4px;
+}
+
+.answer-table {
+  font-family: var(--sans);
+  font-size: 13.5px;
+  border-collapse: collapse;
+  margin: 0 0 0.9em;
+  width: 100%;
+}
+
+.answer-table th,
+.answer-table td {
+  border: 1px solid var(--rule);
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.answer-table th {
+  background: var(--paper);
+  font-weight: 600;
+}
+
+/* Inline citation chip — ties a claim to the passage that supports it. */
+.cite-chip {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--cite);
+  background: var(--cite-wash);
+  border-radius: 2px;
+  padding: 1px 5px;
+  white-space: nowrap;
+  cursor: pointer;
+  border: none;
+}
+
+.cite-chip:hover {
+  background: var(--cite);
+  color: #fff;
+}
+
+.caret {
+  display: inline-block;
+  width: 7px;
+  height: 1.05em;
+  background: var(--cite);
+  vertical-align: text-bottom;
+  animation: blink 1.1s steps(2, start) infinite;
+}
+
+@keyframes blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+/* ---------- state banners ---------- */
+
+.banner {
+  max-width: var(--measure);
+  border-left: 3px solid;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  padding: 11px 14px;
+  margin-bottom: 14px;
+  font-size: 13.5px;
+}
+
+.banner h4 {
+  margin: 0 0 3px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.banner p {
   margin: 0;
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
+/* The one loud moment in the interface: the documents do not agree. */
+.banner.conflict {
+  border-color: var(--conflict);
+  background: var(--conflict-wash);
+  color: var(--conflict);
 }
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
+.banner.fault {
+  border-color: var(--fault);
+  background: var(--fault-wash);
+  color: var(--fault);
+}
+
+/* ---------- sources ---------- */
+
+.sources {
+  margin-top: 16px;
+  max-width: var(--measure);
+}
+
+.sources-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--cite);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--cite-wash);
+  margin-bottom: 10px;
+}
+
+.sources-head strong {
+  font-weight: 600;
+}
+
+.source {
+  border: 1px solid var(--rule);
+  border-left: 2px solid var(--cite);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  margin-bottom: 7px;
+  background: var(--surface);
+}
+
+.source.flagged {
+  border-left-color: var(--conflict);
+}
+
+.source-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 8px 11px;
+  cursor: pointer;
+  flex-wrap: wrap;
+}
+
+.source-head:hover {
+  background: var(--paper);
+}
+
+.source-id {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--cite);
+}
+
+.source-where {
+  font-size: 12.5px;
+  color: var(--ink);
+}
+
+/* Dates earn their prominence: comparing them is how a reader settles a conflict. */
+.source-date {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--slate);
+}
+
+.source-text {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-x: auto;
+  margin: 0;
+  padding: 10px 11px 12px;
+  border-top: 1px solid var(--rule);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+/* ---------- per-message meta ---------- */
+
+.answer-meta {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 12px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--slate);
+}
+
+.answered-by {
+  color: var(--ink);
+}
+
+.badge {
+  border: 1px solid var(--conflict);
+  color: var(--conflict);
+  border-radius: 2px;
+  padding: 0 5px;
+}
+
+/* ---------- empty state ---------- */
+
+.empty {
+  max-width: var(--measure);
+  padding-top: 16px;
+}
+
+.empty h1 {
+  font-family: var(--serif);
+  font-size: 27px;
+  font-weight: 400;
+  line-height: 1.25;
+  margin: 0 0 10px;
+}
+
+.empty p {
+  color: var(--slate);
+  margin: 0 0 22px;
+  max-width: 54ch;
+}
+
+.starters {
+  display: grid;
+  gap: 7px;
+}
+
+.starter {
+  text-align: left;
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 11px 13px;
+  cursor: pointer;
+  font-family: var(--serif);
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.starter:hover {
+  border-color: var(--cite);
+  background: var(--cite-wash);
+}
+
+.starter small {
+  display: block;
+  font-family: var(--sans);
+  font-size: 11.5px;
+  color: var(--slate);
+  margin-top: 3px;
+}
+
+.starter:hover small {
+  color: var(--cite);
+}
+
+/* ---------- usage strip ---------- */
+
+.usage {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: 9px 24px;
+  border-top: 1px solid var(--rule);
+  background: var(--paper);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--slate);
+}
+
+.usage b {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.meter {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+}
+
+.meter-track {
+  width: 92px;
+  height: 4px;
+  background: var(--rule);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.meter-fill {
+  height: 100%;
+  background: var(--cite);
+  transition: width 0.3s ease;
+}
+
+.meter.warn .meter-fill {
+  background: var(--conflict);
+}
+
+.meter.warn {
+  color: var(--conflict);
+}
+
+.meter.critical .meter-fill {
+  background: var(--fault);
+}
+
+.meter.critical {
+  color: var(--fault);
+  font-weight: 600;
+}
+
+.export {
+  display: flex;
+  gap: 6px;
+}
+
+.export button {
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 2px 7px;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--slate);
+}
+
+.export button:hover:not(:disabled) {
+  border-color: var(--cite);
+  color: var(--cite);
+}
+
+.export button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ---------- composer ---------- */
+
+.composer {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  padding: 14px 24px 18px;
+  border-top: 1px solid var(--rule);
+}
+
+.composer textarea {
+  flex: 1;
+  resize: none;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  font-family: var(--serif);
+  font-size: 15.5px;
+  line-height: 1.45;
+  max-height: 160px;
+}
+
+.composer textarea:focus {
+  border-color: var(--cite);
+}
+
+.send {
+  background: var(--ink);
+  color: #fff;
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  padding: 10px 18px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.send:hover:not(:disabled) {
+  background: #000;
+}
+
+.send:disabled {
+  background: var(--slate);
+  border-color: var(--slate);
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 680px) {
+  .transcript,
+  .topbar,
+  .composer,
+  .usage {
+    padding-inline: 16px;
+  }
+
+  .wordmark span {
+    display: none;
+  }
+
+  .meter {
+    margin-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
   }
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getIndex } from "./index";
-import { findProduct, resolveProduct } from "./retrieve";
+import { MAX_CONFLICTS, comparable, findProduct, productOf, resolveProduct } from "./retrieve";
 
 const index = getIndex();
 
@@ -107,15 +107,44 @@ describe("E5 — loosely worded questions still find the material", () => {
 });
 
 describe("E4 — documented disagreements are flagged structurally", () => {
-  it("flags the Vault SAML conflict between the product doc and the security overview", () => {
+  const pairsWith = (conflicts: Array<[string, string]>, a: RegExp, b: RegExp) =>
+    conflicts.some(([x, y]) => (a.test(x) && b.test(y)) || (a.test(y) && b.test(x)));
+
+  it("flags the Vault SAML conflict between a Vault document and the security overview", () => {
     const result = index.search("Which products support SSO via SAML 2.0?");
 
-    const flagged = new Set(result.conflicts.flat());
-    const hasVaultSide = [...flagged].some((id) => id.startsWith("vault.md"));
-    const hasOverviewSide = [...flagged].some((id) => id.startsWith("security-overview.md"));
+    // The overview (January) says Enterprise; Vault's own docs (July, and release
+    // note 3.1) say it reached Pro. Either Vault document is a valid counterpart.
+    expect(pairsWith(result.conflicts, /^security-overview\.md/, /^vault/)).toBe(true);
+  });
 
+  it("surfaces the Relay Pro pricing conflict between the table and release note 4.2", () => {
+    // relay.md lists Pro at $49; release note 4.2 moves it to $59 for new contracts.
+    const result = index.search("What are the key differences between Relay's Pro and Enterprise tiers?");
+    expect(pairsWith(result.conflicts, /^relay\.md#pricing/, /^relay-release-notes\.md/)).toBe(true);
+  });
+
+  it("reports only a handful of candidates, so the warning stays meaningful", () => {
+    // A naive shared-term count produced twenty pairs for this one question —
+    // every cross-file combination — which makes the flag worthless.
+    const result = index.search("Which of our products support SSO via SAML 2.0?");
     expect(result.conflicts.length).toBeGreaterThan(0);
-    expect(hasVaultSide && hasOverviewSide).toBe(true);
+    expect(result.conflicts.length).toBeLessThanOrEqual(MAX_CONFLICTS);
+  });
+
+  it("does not flag two different products as disagreeing with each other", () => {
+    // Relay and Pulse publish different 403 checklists. That is two products, not
+    // a contradiction, and flagging it trains the reader to ignore the warning.
+    const result = index.search("A client is getting a 403 on the Relay API. What should they check first?");
+    expect(pairsWith(result.conflicts, /^relay/, /^pulse/)).toBe(false);
+  });
+
+  it("treats same-product and company-wide documents as comparable, cross-product as not", () => {
+    expect(comparable("vault.md", "vault-release-notes.md")).toBe(true);
+    expect(comparable("vault.md", "security-overview.md")).toBe(true);
+    expect(comparable("vault.md", "pulse.md")).toBe(false);
+    expect(productOf("relay-release-notes.md")).toBe("relay");
+    expect(productOf("support-policy.md")).toBeNull();
   });
 });
 

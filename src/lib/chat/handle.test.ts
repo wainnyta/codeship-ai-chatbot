@@ -176,7 +176,7 @@ describe("R2 — retrieved sources travel with every answer", () => {
     const flagged = new Set(conflicts.flat());
 
     expect(conflicts.length).toBeGreaterThan(0);
-    expect([...flagged].some((id) => id.startsWith("vault.md"))).toBe(true);
+    expect([...flagged].some((id) => id.startsWith("vault"))).toBe(true);
     expect([...flagged].some((id) => id.startsWith("security-overview.md"))).toBe(true);
   });
 

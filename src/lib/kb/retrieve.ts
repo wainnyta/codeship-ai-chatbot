@@ -174,7 +174,6 @@ export class KnowledgeBaseIndex {
   private score(doc: IndexedChunk, terms: string[]): { score: number; matched: string[] } {
     const k1 = 1.5;
     const b = 0.75;
-    const N = this.docs.length;
 
     let score = 0;
     const matched: string[] = [];
@@ -184,8 +183,7 @@ export class KnowledgeBaseIndex {
       if (!tf) continue;
       matched.push(term);
 
-      const df = this.df.get(term) ?? 0;
-      const idf = Math.log(1 + (N - df + 0.5) / (df + 0.5));
+      const idf = this.idf(term);
       const norm = tf * (k1 + 1);
       const denom = tf + k1 * (1 - b + (b * doc.length) / this.avgLength);
       score += idf * (norm / denom);
@@ -229,35 +227,89 @@ export class KnowledgeBaseIndex {
     const passages = ranked.slice(0, limit);
     return {
       passages,
-      conflicts: detectConflicts(passages),
+      conflicts: detectConflicts(passages, (t) => this.idf(t)),
       empty: false,
       product,
     };
   }
+
+  /** Inverse document frequency across chunks. Rare terms carry more signal. */
+  idf(term: string): number {
+    const N = this.docs.length;
+    const df = this.df.get(term) ?? 0;
+    return Math.log(1 + (N - df + 0.5) / (df + 0.5));
+  }
+}
+
+/** The product a document belongs to, or null for a company-wide document. */
+export function productOf(file: string): string | null {
+  return PRODUCTS.find((p) => file.startsWith(p)) ?? null;
 }
 
 /**
- * Two passages from different documents that both match the same two-or-more
- * meaningful query terms are treated as potentially disagreeing, and flagged to the
- * model before it writes. The corpus contains at least one real instance: Vault's
- * SAML tier is stated one way in the company-wide security overview and another in
- * the product documentation.
+ * Whether two documents could contradict each other at all.
+ *
+ * Two different products' SLA tables hold different values, but that is not a
+ * disagreement — it is two products. Without this check, every per-product question
+ * flags the parallel section of all three other products, and the warning becomes
+ * noise the reader learns to ignore. Passages can only conflict when they describe
+ * the same product, or when one of them is a company-wide document making a claim
+ * about that product — which is exactly where the corpus's real drift lives.
  */
-export function detectConflicts(passages: ScoredChunk[]): Array<[string, string]> {
-  const conflicts: Array<[string, string]> = [];
+export function comparable(fileA: string, fileB: string): boolean {
+  const a = productOf(fileA);
+  const b = productOf(fileB);
+  if (a && b) return a === b;
+  return true; // at least one is company-wide
+}
+
+/** Most specific candidate pairs to report. Beyond a handful, a flag is noise. */
+export const MAX_CONFLICTS = 3;
+
+/** Minimum combined rarity before two passages count as covering the same ground. */
+export const CONFLICT_THRESHOLD = 3.0;
+
+/**
+ * Candidate disagreements: passages from *different* documents that make claims
+ * about the same specific thing.
+ *
+ * Pairs are scored by the combined rarity (IDF) of the terms they share, not by how
+ * many they share. Counting matches alone flags everything — a question like "which
+ * products support SSO via SAML 2.0" expands to a dozen terms, and nearly every
+ * passage in the corpus matches two of them, so a naive count produced twenty pairs
+ * for one question. Rarity is the signal: two passages both mentioning "enterprise"
+ * means nothing, both mentioning "vault" and "saml" means they are talking about the
+ * same fact and could contradict each other.
+ *
+ * This finds *candidates*, not proven contradictions — lexical overlap cannot tell
+ * agreement from disagreement. The model adjudicates, under an instruction to stay
+ * silent when the passages turn out to agree.
+ */
+export function detectConflicts(
+  passages: ScoredChunk[],
+  idf: (term: string) => number,
+): Array<[string, string]> {
+  const scored: Array<{ pair: [string, string]; weight: number }> = [];
 
   for (let i = 0; i < passages.length; i++) {
     for (let j = i + 1; j < passages.length; j++) {
       const a = passages[i];
       const b = passages[j];
       if (a.chunk.file === b.chunk.file) continue;
+      if (!comparable(a.chunk.file, b.chunk.file)) continue;
 
-      const shared = a.matched.filter(
-        (t) => !STOPWORDS.has(t) && t.length > 1 && b.matched.includes(t),
-      );
-      if (shared.length >= 2) conflicts.push([a.chunk.id, b.chunk.id]);
+      const shared = meaningfulTerms(a.matched).filter((t) => b.matched.includes(t));
+      if (shared.length < 2) continue;
+
+      const weight = shared.reduce((sum, t) => sum + idf(t), 0);
+      if (weight >= CONFLICT_THRESHOLD) {
+        scored.push({ pair: [a.chunk.id, b.chunk.id], weight });
+      }
     }
   }
 
-  return conflicts;
+  return scored
+    .sort((x, y) => y.weight - x.weight)
+    .slice(0, MAX_CONFLICTS)
+    .map((s) => s.pair);
 }
