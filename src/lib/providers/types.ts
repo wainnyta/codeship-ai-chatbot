@@ -118,8 +118,20 @@ export function classifyError(error: unknown): ProviderError {
       retryAfterSeconds,
     );
   }
-  if (text.includes("quota") || text.includes("credit balance") || text.includes("insufficient")) {
-    return new ProviderError("quota", "That provider's account is out of credit.");
+  // 402 is how Google reports a key with no billing attached; Anthropic reports the
+  // same condition as a 400 whose body mentions the credit balance. Both are "the
+  // account cannot pay", which is an operator problem, not something a user can retry.
+  if (
+    status === 402 ||
+    text.includes("quota") ||
+    text.includes("credit balance") ||
+    text.includes("insufficient") ||
+    text.includes("billing")
+  ) {
+    return new ProviderError(
+      "quota",
+      "That provider's account has no credit or billing set up. Another model may still work.",
+    );
   }
   if (text.includes("context") && (text.includes("too long") || text.includes("exceed"))) {
     return new ProviderError(

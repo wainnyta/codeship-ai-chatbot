@@ -170,6 +170,12 @@ export async function* runChat(options: RunChatOptions): AsyncGenerator<StreamEv
       }
 
       // PRE-LATCH. Nothing was shown, so switching providers is invisible and safe.
+      // Logged because it is invisible: a provider can be dead for days — wrong
+      // model id, expired key, no credit — while users see perfectly good answers
+      // from the fallback and nobody finds out.
+      console.warn(
+        `[provider] ${model.id} failed before output (${classified.code}): ${classified.message}`,
+      );
       if (held !== null) held = null;
       continue;
     }

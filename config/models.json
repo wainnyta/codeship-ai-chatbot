@@ -1,20 +1,22 @@
 {
   "$comment": "Single source of truth for model metadata (R3). Nothing about a model is hard-coded in src/. Prices are USD per million tokens, taken from each provider's published pricing; re-check them when they change, because every cost figure in the UI is derived from here.",
 
-  "defaultModelId": "gemini-2.5-flash",
+  "$defaultComment": "OpenAI is the default because it is the provider with working billing on this account today. Gemini would otherwise lead on cost (free tier), but its key currently returns 402 and Anthropic's is out of credit, and defaulting to a dead provider makes every first message pay a wasted round trip before falling back. Change this line once the other accounts are funded.",
+  "defaultModelId": "gpt-6.1-sol",
 
-  "$fallbackOrderComment": "Tried in order when the selected model cannot produce a reply. The selected model is always tried first and then skipped here. Gemini leads because its free tier means it keeps working when paid credit lapses.",
-  "fallbackOrder": ["gemini-2.5-flash", "claude-opus-5-5", "gpt-6.1-sol"],
+  "$fallbackOrderComment": "Tried in order when the selected model cannot produce a reply. The selected model is always tried first and then skipped here.",
+  "fallbackOrder": ["gpt-6.1-sol", "gemini-3.8-flash", "claude-opus-5-5"],
 
   "models": [
     {
-      "id": "gemini-2.5-flash",
+      "id": "gemini-3.8-flash",
       "provider": "google",
-      "label": "Gemini 2.5 Flash",
+      "label": "Gemini 3.8 Flash",
       "description": "Google. Fast, and the only one with a free tier, so it is the default and the head of the fallback chain.",
       "contextWindow": 1048576,
       "maxOutputTokens": 4096,
-      "pricing": { "inputPerMillion": 0.3, "outputPerMillion": 2.5 },
+      "$pricingComment": "Promotional rate through 2026-12-31; both double on 2027-01-01 ($1.50 / $7.50). Output price includes thinking tokens.",
+      "pricing": { "inputPerMillion": 0.75, "outputPerMillion": 3.75 },
       "apiKeyEnvVar": "GOOGLE_GENERATIVE_AI_API_KEY"
     },
     {

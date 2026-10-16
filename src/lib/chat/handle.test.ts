@@ -1,5 +1,6 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { handleChatRequest } from "./handle";
+import { resolveChain } from "../config";
 import type { Adapter, ChatMessage, ProviderUsage, StreamEvent } from "../providers/types";
 import { ProviderError } from "../providers/types";
 
@@ -12,14 +13,14 @@ import { ProviderError } from "../providers/types";
  * a model happens to say.
  */
 
-beforeAll(() => {
-  // resolveChain() drops models without credentials, so give all three a key.
-  process.env.GOOGLE_GENERATIVE_AI_API_KEY = "test-key";
-  process.env.ANTHROPIC_API_KEY = "test-key";
-  process.env.OPENAI_API_KEY = "test-key";
-});
+// Set at module scope, not in beforeAll: resolveChain() reads these, and the
+// describe bodies below call it while collecting tests — which happens before any
+// beforeAll hook runs.
+process.env.GOOGLE_GENERATIVE_AI_API_KEY = "test-key";
+process.env.ANTHROPIC_API_KEY = "test-key";
+process.env.OPENAI_API_KEY = "test-key";
 
-const GEMINI = "gemini-2.5-flash";
+const GEMINI = "gemini-3.8-flash";
 const CLAUDE = "claude-opus-5-5";
 const GPT = "gpt-6.1-sol";
 
@@ -237,8 +238,8 @@ describe("R4/R5 — the answering model and its usage", () => {
     const fake = makeFake({ [GEMINI]: { usage: { inputTokens: 3000, outputTokens: 500 } } });
     const { events } = await post(ask("What does Nimbus Vault cost?"), GEMINI, fake);
 
-    // Gemini at $0.30/$2.50 per million
-    expect(find(events, "usage")?.usage.costUsd).toBeCloseTo(0.00215, 10);
+    // Gemini at $0.75/$3.75 per million
+    expect(find(events, "usage")?.usage.costUsd).toBeCloseTo(0.004125, 10);
   });
 
   it("marks a reply that hit the output cap as truncated rather than failed", async () => {
@@ -252,17 +253,22 @@ describe("R4/R5 — the answering model and its usage", () => {
 });
 
 describe("R3/E8 — fallback and the first-flush latch", () => {
+  // Derived from the config rather than hardcoded. The behaviour under test is
+  // "falls back to the next configured model", not "falls back to one named model",
+  // so reordering config/models.json must not break these.
+  const NEXT_AFTER_CLAUDE = resolveChain(CLAUDE)[1].id;
+
   it("falls back silently when the selected provider fails before producing text", async () => {
     const fake = makeFake({
       [CLAUDE]: { failBefore: new ProviderError("unavailable", "Anthropic is down.") },
-      [GEMINI]: { deltas: ["Vault ", "costs ", "$12."] },
+      [NEXT_AFTER_CLAUDE]: { deltas: ["Vault ", "costs ", "$12."] },
     });
     const { events } = await post(ask("What does Nimbus Vault cost?"), CLAUDE, fake);
 
-    expect(fake.calls).toEqual([CLAUDE, GEMINI]);
+    expect(fake.calls).toEqual([CLAUDE, NEXT_AFTER_CLAUDE]);
 
     const model = find(events, "model")!.model;
-    expect(model.id).toBe(GEMINI);
+    expect(model.id).toBe(NEXT_AFTER_CLAUDE);
     expect(model.fallback).toBe(true);
     expect(model.selectedId).toBe(CLAUDE);
 
@@ -276,14 +282,14 @@ describe("R3/E8 — fallback and the first-flush latch", () => {
     // A provider that dies one token in is therefore still recoverable.
     const fake = makeFake({
       [CLAUDE]: { deltas: ["Vau"], failAfter: 1 },
-      [GEMINI]: { deltas: ["Vault ", "costs ", "$12."] },
+      [NEXT_AFTER_CLAUDE]: { deltas: ["Vault ", "costs ", "$12."] },
     });
     const { events } = await post(ask("What does Nimbus Vault cost?"), CLAUDE, fake);
 
-    expect(fake.calls).toEqual([CLAUDE, GEMINI]);
+    expect(fake.calls).toEqual([CLAUDE, NEXT_AFTER_CLAUDE]);
     // Critically, the abandoned "Vau" never reached the user.
     expect(textOf(events)).toBe("Vault costs $12.");
-    expect(find(events, "model")!.model.id).toBe(GEMINI);
+    expect(find(events, "model")!.model.id).toBe(NEXT_AFTER_CLAUDE);
   });
 
   it("does NOT fall back once text has been shown, and never mixes two models", async () => {

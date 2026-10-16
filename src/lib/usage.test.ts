@@ -11,7 +11,7 @@ import {
 } from "./usage";
 
 const CLAUDE = { inputPerMillion: 4.0, outputPerMillion: 20.0 };
-const GEMINI = { inputPerMillion: 0.3, outputPerMillion: 2.5 };
+const GEMINI = { inputPerMillion: 0.75, outputPerMillion: 3.75 };
 
 describe("cost", () => {
   it("prices input and output at their separate rates", () => {
@@ -25,7 +25,7 @@ describe("cost", () => {
   });
 
   it("prices the same message differently per model, from config values", () => {
-    expect(costOf(GEMINI, 3_000, 500)).toBeCloseTo(0.00215, 10);
+    expect(costOf(GEMINI, 3_000, 500)).toBeCloseTo(0.004125, 10);
   });
 
   it("is zero for a message that never called a provider", () => {
