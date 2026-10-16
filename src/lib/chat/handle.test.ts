@@ -8,7 +8,7 @@ import type {
   Rewriter,
   StreamEvent,
 } from "../providers/types";
-import type { BuiltPrompt } from "../prompt";
+import { NOT_IN_KB_MESSAGE, SCOPE_PROMPT, type BuiltPrompt } from "../prompt";
 import { ProviderError } from "../providers/types";
 
 /**
@@ -156,18 +156,52 @@ describe("E10 — an empty message never reaches a provider", () => {
   });
 });
 
-describe("E2 — off-corpus questions are answered without a provider", () => {
-  it("says it is not in the knowledge base, calls nothing, and costs nothing", async () => {
+describe("E2 — off-corpus questions get no passages to answer from", () => {
+  it("hands the model nothing to cite", async () => {
     const fake = makeFake({});
     const { events } = await post(ask("What is the capital of France?"), GEMINI, fake);
 
-    expect(fake.calls).toEqual([]);
-    expect(textOf(events)).toMatch(/isn't covered in the NimbusStack knowledge base/i);
+    // The grounding guarantee is structural rather than procedural: a model that
+    // was given no passages has nothing to quote and no document to misattribute,
+    // whatever it decides to say.
+    expect(find(events, "meta")!.passages).toEqual([]);
+    expect(find(events, "meta")!.conflicts).toEqual([]);
+    expect(fake.prompts[0].userContent).toBe("What is the capital of France?");
+  });
 
-    const usage = find(events, "usage");
-    expect(usage?.usage.costUsd).toBe(0);
-    expect(usage?.usage.inputTokens).toBe(0);
+  it("restricts the model to describing itself or refusing, in fixed words", async () => {
+    const fake = makeFake({});
+    await post(ask("What is the capital of France?"), GEMINI, fake);
+
+    const system = fake.prompts[0].system;
+    expect(system).toBe(SCOPE_PROMPT);
+    // The refusal is text to copy, not text to compose.
+    expect(system).toContain(NOT_IN_KB_MESSAGE);
+    expect(system).toMatch(/exactly two permitted replies/i);
+    expect(system).toMatch(/not certain which case applies, use case 2/i);
+  });
+
+  it("still reports which model answered, and what it cost", async () => {
+    const fake = makeFake({ [GEMINI]: { usage: { inputTokens: 300, outputTokens: 40 } } });
+    const { events } = await post(ask("What is the capital of France?"), GEMINI, fake);
+
+    expect(find(events, "model")?.model.id).toBe(GEMINI);
+    expect(find(events, "usage")?.usage.inputTokens).toBe(300);
     expect(find(events, "done")).toBeDefined();
+  });
+
+  it("answers a question about the assistant rather than refusing it", async () => {
+    const fake = makeFake({
+      [GEMINI]: { deltas: ["I'm the ", "NimbusStack ", "product assistant."] },
+    });
+    const { events } = await post(ask("hi, who are you"), GEMINI, fake);
+
+    // This retrieves nothing, exactly like the France question. The difference is
+    // semantic, so the model is what tells them apart — the endpoint does not
+    // decide the answer here, it only withholds the documents.
+    expect(find(events, "meta")!.passages).toEqual([]);
+    expect(fake.calls).toEqual([GEMINI]);
+    expect(textOf(events)).toBe("I'm the NimbusStack product assistant.");
   });
 });
 
@@ -528,10 +562,11 @@ describe("follow-up questions are resolved before retrieval", () => {
 
     // "what is it" finishes cleanly and is short enough to look like a query, but
     // carries no searchable term — so the question as typed is used instead. That
-    // question is itself unsearchable, so this ends in the honest refusal rather
-    // than in a confident answer retrieved against noise.
+    // question is itself unsearchable, so the model is handed no passages rather
+    // than passages retrieved against noise.
     expect(find(events, "meta")?.rewrite?.query).toBe("how can i use it");
-    expect(fake.calls).toEqual([]);
+    expect(find(events, "meta")!.passages).toEqual([]);
+    expect(fake.prompts[0].system).toBe(SCOPE_PROMPT);
   });
 
   it("refuses rather than invents when every rewrite provider is down", async () => {
@@ -543,12 +578,12 @@ describe("follow-up questions are resolved before retrieval", () => {
 
     const { events } = await post(followUp, GEMINI, fake, dead);
 
-    // The honest outcome. Searching `use` matches nothing, so this question is
-    // refused — exactly as it was before rewriting existed. No answering model is
-    // asked, so there is nothing for one to guess at.
+    // The honest outcome. Searching `use` matches nothing, exactly as before
+    // rewriting existed, so the model is handed no passages and is restricted to
+    // describing itself or refusing. Nothing is retrieved for it to misquote.
     expect(find(events, "meta")?.rewrite).toBeUndefined();
-    expect(fake.calls).toEqual([]);
-    expect(textOf(events)).toMatch(/isn't covered in the NimbusStack knowledge base/i);
+    expect(find(events, "meta")!.passages).toEqual([]);
+    expect(fake.prompts[0].system).toBe(SCOPE_PROMPT);
     expect(find(events, "error")).toBeUndefined();
     warn.mockRestore();
   });
@@ -580,11 +615,12 @@ describe("follow-up questions are resolved before retrieval", () => {
       rewriter,
     );
 
-    expect(fake.calls).toEqual([]);
-    expect(textOf(events)).toMatch(/isn't covered in the NimbusStack knowledge base/i);
-    // The answer cost nothing. Resolving the question did, and that is reported
-    // rather than hidden — otherwise session spend silently drifts.
-    expect(find(events, "usage")?.usage.costUsd).toBe(0);
+    expect(find(events, "meta")!.passages).toEqual([]);
+    expect(fake.prompts[0].system).toBe(SCOPE_PROMPT);
+    // Resolving the question is billed separately from answering it, so an
+    // off-corpus follow-up still shows what the rewrite cost rather than hiding
+    // it — otherwise session spend silently drifts.
     expect(find(events, "meta")?.rewrite?.usage.inputTokens).toBe(240);
+    expect(find(events, "usage")?.usage.inputTokens).toBe(1000);
   });
 });

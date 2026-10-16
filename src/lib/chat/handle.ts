@@ -1,7 +1,7 @@
 import { DEFAULT_MODEL_ID, getModel, resolveChain } from "../config";
 import { getIndex } from "../kb";
 import type { KnowledgeBaseIndex } from "../kb/retrieve";
-import { NOT_IN_KB_MESSAGE, buildPrompt } from "../prompt";
+import { buildPrompt, buildScopePrompt } from "../prompt";
 import { runChat } from "../providers/stream";
 import type { Adapter, ChatMessage, Rewriter, StreamEvent } from "../providers/types";
 import { resolveQuery } from "./rewrite";
@@ -131,34 +131,21 @@ export async function handleChatRequest(request: Request, deps: ChatDeps): Promi
       ? { query: resolved.query, modelId: resolved.modelId, usage: resolved.usage }
       : undefined;
 
-  // E2. Nothing in the corpus is relevant, so the honest answer is produced here —
-  // no provider call, no tokens, no cost, and no opportunity to invent anything.
-  if (retrieval.empty) {
-    return sse([
-      { type: "meta", passages: [], conflicts: [], ...(rewrite ? { rewrite } : {}) },
-      {
-        type: "model",
-        model: {
-          id: "none",
-          label: "No model needed",
-          provider: "none",
-          contextWindow: selected.contextWindow,
-          fallback: false,
-          selectedId,
-        },
-      },
-      { type: "delta", text: NOT_IN_KB_MESSAGE },
-      {
-        type: "usage",
-        modelId: "none",
-        truncated: false,
-        usage: { inputTokens: 0, outputTokens: 0, costUsd: 0, estimated: false },
-      },
-      { type: "done" },
-    ]);
-  }
-
-  const prompt = buildPrompt(question, retrieval, resolved.query);
+  /**
+   * E2. Nothing in the corpus matched, so no passages go to the model and nothing
+   * can be cited. The model's only remaining job is to tell apart a product
+   * question the documentation does not cover — which it must refuse in fixed
+   * words — from a question about the assistant itself, which it may answer
+   * because the answer is in its own prompt rather than in any document.
+   *
+   * This used to be answered here without contacting a provider, which was free
+   * and fast and also meant "hi, who are you" was refused. The exchange is one
+   * short call on a path that is rare in real use, against an assistant that
+   * answers the first thing anyone types.
+   */
+  const prompt = retrieval.empty
+    ? buildScopePrompt(question)
+    : buildPrompt(question, retrieval, resolved.query);
 
   // Refuse before dispatch rather than letting the provider reject it, so the user
   // gets an instruction instead of a provider error.

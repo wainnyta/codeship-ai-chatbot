@@ -36,7 +36,7 @@ Open http://localhost:3000.
 npm test
 ```
 
-136 tests, no network and no API key required.
+139 tests, no network and no API key required.
 
 ---
 
@@ -51,8 +51,8 @@ question
    │
    ├─ retrieve (BM25 over heading-split chunks)
    │     │
-   │     └─ nothing relevant?  ───────────────►  "not in the knowledge base",
-   │                                              no provider called, zero cost
+   │     └─ nothing relevant?  ───────────────►  no passages sent; the model may
+   │                                              only describe itself or refuse
    ├─ flag candidate disagreements
    ├─ build prompt (passages + dates + rules)
    ├─ too long for the model's window?  ──────►  refused before dispatch
@@ -66,6 +66,12 @@ question
 The corpus in `nimbusstack-knowledge-base/` is used exactly as supplied and never edited. At boot it is split at markdown heading boundaries into in-memory chunks. There is no index to build and nothing a fresh clone can have out of date.
 
 **Citations are produced by the retriever, not by the model.** The model is told to cite passage ids, but the authoritative source list attached to every answer is the set that retrieval returned. A model physically cannot cite a document that was not retrieved, which is the structural defence against inventing an answer.
+
+**When retrieval finds nothing, the model is sent no passages at all.** "Nothing retrieved" covers two different situations: a product question the documentation does not cover, and a question about the assistant itself. `hi, who are you` retrieves nothing, and refusing it made the assistant look broken on the first thing anyone types — yet its answer comes from the assistant's own prompt, not from general knowledge, so answering it is not an ungrounded claim.
+
+Telling the two apart is semantic, so the model does it under a restricted prompt offering exactly two replies: describe yourself, naming no feature, price, tier, version or date — or reply with the refusal text verbatim. The grounding guarantee is unchanged and structural, because no passages are supplied: there is nothing to cite and no document to misquote, whatever it decides. Verified live across all three providers on greetings, "what can you do", a non-English greeting, world-knowledge questions, a write-me-a-poem request, arithmetic, and a prompt injection.
+
+This costs one short call on a path that used to be free. The exchange is an assistant that answers the first thing anyone types.
 
 **Retrieval is lexical (BM25), not embeddings.** The corpus is ~15KB across ten files. An embedding index would add a provider dependency and a build step for no measurable recall benefit at this size, and would blur exactly the tokens these questions turn on — `P1`, `Pro`, `4.2`, `SAML`, `403`. Chunks are never split mid-table, so a tier lookup keeps the column headers that tell Pro from Enterprise.
 
@@ -133,9 +139,9 @@ The context meter warns at 75% (amber) and 90% (red), and recomputes the moment 
 
 ## Testing
 
-Two seams, 136 tests, no network access or API key needed.
+Two seams, 139 tests, no network access or API key needed.
 
-**The chat endpoint** is driven over its real HTTP contract with a fake provider injected at the registry boundary — configuration, not module patching, so the seam stays a genuine boundary. Tests assert what a caller can observe rather than how the internals are arranged, which means the retriever can be rewritten without rewriting the tests. Covered: the six representative questions' retrieval, conflict flagging, empty input reaching no provider, off-corpus questions reaching no provider, silent pre-latch fallback, no fallback after flush and no mixing of two models' text, estimated usage on an aborted stream, truncation, rate-limit messaging, per-model cost, and follow-up resolution — that a rewrite reaches retrieval but never the question the model is asked, that a cut-off or unsearchable rewrite is rejected, that both attempts are billed when one is, and that no rewrite call is made on a first question or an empty one.
+**The chat endpoint** is driven over its real HTTP contract with a fake provider injected at the registry boundary — configuration, not module patching, so the seam stays a genuine boundary. Tests assert what a caller can observe rather than how the internals are arranged, which means the retriever can be rewritten without rewriting the tests. Covered: the six representative questions' retrieval, conflict flagging, empty input reaching no provider, off-corpus questions reaching the model with no passages and under the restricted prompt, silent pre-latch fallback, no fallback after flush and no mixing of two models' text, estimated usage on an aborted stream, truncation, rate-limit messaging, per-model cost, and follow-up resolution — that a rewrite reaches retrieval but never the question the model is asked, that a cut-off or unsearchable rewrite is rejected, that both attempts are billed when one is, and that no rewrite call is made on a first question or an empty one.
 
 **Token, cost and context arithmetic** is tested as pure functions. This second seam earns its place because the 75%/90% thresholds are unreachable against million-token context windows — synthetic inputs are the only way to exercise them.
 
@@ -178,6 +184,8 @@ Left deliberately, and worth arguing about:
 - **No conversation persistence.** Out of scope per the brief. Refreshing loses the session.
 - **Conflict detection is a candidate finder, and the model is the judge.** Retrieval finds passages covering the same ground; it cannot tell agreement from disagreement, because that is semantic. Those candidates go into the prompt — that is what makes the model look — but the amber banner is raised only when the answer itself declares a contradiction. If a model omits the declaration the UI under-warns while the prose still spells the disagreement out, which is the safe direction.
 - **The relevance floor is a heuristic** — two distinct meaningful terms on one passage, relaxed to one when the question names a product. It is tuned against the representative questions and could still be wrong at the margins. False refusals are the failure mode to watch: a confidently wrong answer is worse, but refusing a question the documents do answer erodes trust just as fast.
+- **An off-corpus question now costs a model call.** It used to be answered deterministically for nothing, which was a nice property and also why the assistant could not say hello. The structural defence — no passages, so nothing citable — is what actually prevents invention, and that is unchanged; the free short-circuit was never what guaranteed it.
+
 - **The rewrite is load-bearing for dependent follow-ups.** It falls back across providers like every other call, but if all three are unreachable, "how can I use it" degrades to the honest refusal rather than to a worse answer. That is the right direction to fail in, and it is a real availability dependency that did not exist before.
 
 - **Nothing is persisted.** Conversation state lives in the browser; a refresh clears it. Saving chats between sessions is out of scope per the brief.
