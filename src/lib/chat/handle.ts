@@ -110,18 +110,32 @@ export async function handleChatRequest(request: Request, deps: ChatDeps): Promi
   });
 
   /**
-   * The heuristic product carry below is now the fallback path rather than the
-   * primary one: a successful rewrite names the product in the query itself, and
-   * `resolveProducts` prefers what the query names over what history implies. It
-   * stays because it is what keeps follow-ups working when the rewrite call fails.
+   * The heuristic product carry is now strictly the fallback for when the rewrite
+   * call could not be made, and history is withheld from retrieval whenever it
+   * could.
    *
-   * It reads the user's own earlier questions, never the assistant's replies. An
-   * answer listing all four products would otherwise hand the next follow-up
-   * whichever product it mentioned last — so "what about its SLA?" after "we sell
-   * Relay, Vault, Pulse and Ledger" would silently become a question about Ledger.
+   * The carry assumes that a question naming no product inherits the last one
+   * discussed. That is right for "what about its SLA?" and wrong for "what time is
+   * it", which inherited Vault, and an inherited product lowers the evidence bar
+   * from two matched terms to one — so the single word `time` was enough to
+   * retrieve the support policy's business hours and turn a clean refusal into a
+   * paragraph about office hours.
+   *
+   * A successful rewrite settles this without guessing. If the question referred
+   * back, the rewrite now names what it referred to and `resolveProducts` finds it
+   * in the query itself. If the rewrite returned the question unchanged, that is
+   * positive evidence there was no reference to resolve — and inheriting a topic
+   * anyway is exactly the mistake. Only when no rewrite happened at all is there
+   * nothing better than the guess.
+   *
+   * The carry still reads the user's own earlier questions, never the assistant's
+   * replies: an answer listing all four products would otherwise hand the next
+   * follow-up whichever product it mentioned last.
    */
   const retrieval = index.search(resolved.query, {
-    history: history.filter((m) => m.role === "user").map((m) => m.content),
+    history: resolved.modelId
+      ? []
+      : history.filter((m) => m.role === "user").map((m) => m.content),
   });
 
   // Reported whenever a call was made, including when it returned the question

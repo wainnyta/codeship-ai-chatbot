@@ -508,6 +508,45 @@ describe("follow-up questions are resolved before retrieval", () => {
     expect(find(events, "usage")?.usage.inputTokens).toBe(1800);
   });
 
+  it("does not inherit a topic for a question that refers to nothing", async () => {
+    const fake = makeFake({});
+    // The rewriter saw the conversation and returned the question as it was: there
+    // was no reference to resolve. Inheriting Vault anyway would drop the evidence
+    // bar to a single term, and `time` alone retrieves the support policy's
+    // business hours — turning a clean refusal into a paragraph about office hours.
+    const { rewriter } = makeRewriter("what time is it");
+
+    const { events } = await post(
+      [
+        { role: "user", content: "What's the SLA for Priority 1 tickets on Nimbus Vault?" },
+        { role: "assistant", content: "Starter 4 business hours [vault.md#support-sla]." },
+        { role: "user", content: "what time is it" },
+      ],
+      GEMINI,
+      fake,
+      rewriter,
+    );
+
+    expect(find(events, "meta")!.passages).toEqual([]);
+    expect(fake.prompts[0].system).toBe(SCOPE_PROMPT);
+  });
+
+  it("still inherits a topic when no rewrite could be made", async () => {
+    const fake = makeFake({});
+    // Without a rewriter the guess is the only thing there is, so it stays.
+    const { events } = await post(
+      [
+        { role: "user", content: "What does Nimbus Vault cost?" },
+        { role: "assistant", content: "Starter $12 per seat [vault.md#pricing]." },
+        { role: "user", content: "what about its SLA?" },
+      ],
+      GEMINI,
+      fake,
+    );
+
+    expect(find(events, "meta")!.passages.map((p) => p.id)).toContain("vault.md#support-sla");
+  });
+
   it("spends nothing resolving the first question of a conversation", async () => {
     const fake = makeFake({});
     const rewriter = makeRewriter("rewritten");
