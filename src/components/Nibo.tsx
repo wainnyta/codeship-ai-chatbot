@@ -25,6 +25,15 @@ interface NiboProps {
   /** Rendered width in px. The drawing keeps a 5:4 ratio. */
   size?: number;
   className?: string;
+  /**
+   * Hold the magnifying glass permanently, without the sweep.
+   *
+   * For the header, where Nibo is a mark rather than a status: a cloud that reads
+   * the documents is what this application is, and the glass says that at a glance.
+   * Everywhere else the glass appears only while passages are genuinely being read,
+   * and this prop does not animate, so the two never get confused.
+   */
+  glass?: boolean;
 }
 
 /**
@@ -47,10 +56,10 @@ function CloudShape() {
   );
 }
 
-export function Nibo({ state = "idle", size = 56, className = "" }: NiboProps) {
+export function Nibo({ state = "idle", size = 56, className = "", glass = false }: NiboProps) {
   return (
     <svg
-      className={`nibo nibo-${state} ${className}`.trim()}
+      className={`nibo nibo-${state}${glass ? " nibo-holding" : ""} ${className}`.trim()}
       viewBox="0 0 100 80"
       width={size}
       height={size * 0.8}

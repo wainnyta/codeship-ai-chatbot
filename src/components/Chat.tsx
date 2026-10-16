@@ -360,7 +360,7 @@ export function Chat({ products }: { products: string[] }) {
     <div className="app">
       <header className="topbar">
         <div className="titles">
-          <Nibo size={38} />
+          <Nibo size={42} glass />
           <div>
             <h1>Nibo</h1>
             <p>NimbusStack Product Assistant</p>
@@ -505,7 +505,7 @@ export function Chat({ products }: { products: string[] }) {
       </div>
 
       <div className="nibo-perch">
-        <Nibo state={live.state} size={34} />
+        <Nibo state={live.state} size={46} />
         <span className="nibo-says">{live.line}</span>
       </div>
 

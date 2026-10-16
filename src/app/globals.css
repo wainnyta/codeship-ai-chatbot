@@ -17,6 +17,17 @@
   --slate: #5a6678;
   --rule: #dde2e9;
 
+  /*
+   * The app bar. A darker sibling of --cite rather than a new hue: teal already
+   * means "evidence" throughout this interface, and the bar is the one place the
+   * product gets to say its own name, so it says it in the house colour.
+   */
+  --bar: #0d2b2b;
+  --bar-ink: #f1f7f5;
+  --bar-ink-dim: #86aaa4;
+  --bar-edge: rgba(241, 247, 245, 0.2);
+  --bar-glass: #58d2bb;
+
   --cite: #0e6e62;
   --cite-wash: #e9f3f1;
   --conflict: #9c5a0b;
@@ -82,19 +93,19 @@ input {
  * it sits on one centre line, so the avatar, the name and the button read as a
  * single row rather than three things that happen to be at the top.
  *
- * The weight comes from a quiet gradient and a hairline highlight along the bottom
- * edge rather than from a shadow. A shadow would lift the bar off the page; this
- * reads as the page's own surface being slightly denser where the chrome lives,
- * which is what the rest of this interface does — nothing floats.
+ * Flat, dark, and a single colour. The white-to-grey gradient it replaces was
+ * doing the work of a bevel — the thing a toolbar did in 2008 to look raised — and
+ * it left the top of the page looking like weather. One confident block of the
+ * house teal anchors the page instead, and gives the reading surface below it
+ * somewhere to start.
  */
 .topbar {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 13px 24px;
-  background: linear-gradient(180deg, #ffffff 0%, #f3f5f9 100%);
-  border-bottom: 1px solid #d3dae4;
-  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.9);
+  padding: 11px 24px;
+  background: var(--bar);
+  color: var(--bar-ink);
 }
 
 .titles {
@@ -116,6 +127,7 @@ input {
   letter-spacing: -0.01em;
   margin: 0;
   line-height: 1.15;
+  color: var(--bar-ink);
 }
 
 .titles p {
@@ -124,24 +136,24 @@ input {
   font-size: 11.5px;
   font-weight: 500;
   letter-spacing: 0.015em;
-  color: var(--slate);
+  color: var(--bar-ink-dim);
   line-height: 1.2;
 }
 
 .ghost-button {
-  background: var(--surface);
-  border: 1px solid #d3dae4;
+  background: transparent;
+  border: 1px solid var(--bar-edge);
   border-radius: 6px;
   padding: 7px 13px;
   cursor: pointer;
-  color: var(--slate);
-  box-shadow: 0 1px 1px rgba(21, 29, 42, 0.04);
-  transition: border-color 120ms ease, color 120ms ease;
+  color: var(--bar-ink-dim);
+  transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
 }
 
 .ghost-button:hover:not(:disabled) {
-  border-color: var(--slate);
-  color: var(--ink);
+  border-color: rgba(241, 247, 245, 0.45);
+  background: rgba(241, 247, 245, 0.07);
+  color: var(--bar-ink);
 }
 
 .ghost-button:disabled {
@@ -1141,22 +1153,18 @@ input {
  */
 .nibo-perch {
   display: flex;
-  align-items: flex-end;
-  gap: 9px;
-  padding: 0 22px;
-  /* Dip onto the strip below, so it reads as resting on it rather than above it. */
-  margin-bottom: -7px;
-  position: relative;
-  z-index: 2;
+  align-items: center;
+  gap: 13px;
+  padding: 12px 24px 14px;
   pointer-events: none;
 }
 
 .nibo-perch .nibo {
-  filter: drop-shadow(0 1px 1px rgba(21, 29, 42, 0.07));
+  flex: none;
+  filter: drop-shadow(0 1px 2px rgba(21, 29, 42, 0.08));
 }
 
 .nibo-says {
-  margin-bottom: 9px;
   font-family: var(--sans);
   font-size: 12.5px;
   color: var(--slate);
@@ -1175,4 +1183,31 @@ input {
   .nibo-says {
     animation: none;
   }
+}
+
+/* Held, not sweeping: the header mark rather than the searching gesture. */
+.nibo-holding .nibo-glass circle,
+.nibo-holding .nibo-glass line {
+  opacity: 1;
+  animation: none;
+  transform: translate(-3px, -2px) rotate(-5deg);
+}
+
+/* Nibo as the header mark, on the dark bar. */
+.topbar .nibo-edge {
+  fill: var(--bar-ink);
+  stroke: var(--bar-ink);
+}
+
+.topbar .nibo-fill {
+  fill: var(--bar-ink);
+}
+
+.topbar .nibo-eyes circle {
+  fill: var(--bar);
+}
+
+.topbar .nibo-glass circle,
+.topbar .nibo-glass line {
+  stroke: var(--bar-glass);
 }
