@@ -126,6 +126,12 @@ Provider keys are read in exactly one module, `src/lib/providers/adapter.ts`, wh
 
 Everything the app knows about a model lives in `config/models.json`: id, provider, label, description, context window, max output tokens, prices per million tokens, and the fallback order. Nothing about a model is hard-coded. Adding a fourth provider is a config edit plus an adapter case.
 
+**The default and the fallback order are set by measurement, not by list price.** Over the six representative questions: GPT-6.1 Sol $0.0041 a question and 4.7s, Gemini 3.8 Flash $0.0056 and 8.9s, Claude Opus 5.5 $0.0174 and 4.9s. Gemini has by far the lowest price per token and still costs more than GPT, because its thinking tokens are billed as output and it spends roughly seven times as many of them per answer — 1,234 against 169. The chain is ordered cheapest measured first, so a fallback never silently costs more than it has to.
+
+That same thinking volume is why `maxOutputTokens` is not uniform. Gemini peaked at 4,229 output tokens for about 270 tokens of visible answer, so a 4,096 cap truncated a pricing table mid-row and told the reader the answer had been cut off — a correctness bug wearing the costume of a limit. The cap is a guard against a runaway, not a shape for the answer, so each model's sits well clear of its measured peak. Nothing is billed that is not generated.
+
+The picker opens on the configured default only when that provider has a key, and otherwise on the first model in the chain that does — so a clone holding one provider key opens on that provider rather than on a model it would immediately have to fall back from.
+
 Fallback is governed by a **first-flush latch**:
 
 - **Before any bytes reach the browser**, a provider failure walks quietly to the next model in the chain. This covers nearly every real failure — bad credentials, rate limits at request time, model unavailable, overloaded, quota exhausted.

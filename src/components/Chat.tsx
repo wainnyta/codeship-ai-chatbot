@@ -312,7 +312,11 @@ export function Chat({ products }: { products: string[] }) {
     <div className="app">
       <header className="topbar">
         <div className="titles">
-          <h1>NimbusStack Product Assistant</h1>
+          <Nibo size={38} />
+          <div>
+            <h1>Nibo</h1>
+            <p>NimbusStack Product Assistant</p>
+          </div>
         </div>
 
         <button

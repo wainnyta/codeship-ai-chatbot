@@ -26,6 +26,12 @@ export type CiteHandler = (id: string) => void;
  */
 const INLINE = new RegExp(
   [
+    // First, so that a backslash claims the character after it before any other
+    // branch can. A model writing \*Pro pricing change\* to mean literal asterisks
+    // otherwise rendered as a stray backslash followed by italic text. The class is
+    // every ASCII punctuation mark, as CommonMark specifies — \$59 matters here as
+    // much as \*, because the corpus is full of prices and models escape them.
+    "\\\\[!-\\/:-@\\[-`{-~]", // escaped punctuation: every ASCII punctuation mark
     "\\*\\*[^*]+\\*\\*", // bold
     "\\*[^*\\n]+\\*", // italic
     "(?<![A-Za-z0-9])_[^_\\n]+_(?![A-Za-z0-9])", // italic, underscore form

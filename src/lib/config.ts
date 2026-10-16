@@ -97,6 +97,19 @@ export function resolveChain(selectedId: string): ModelConfig[] {
 }
 
 /**
+ * The model the picker should open on.
+ *
+ * The configured default when its key is present, otherwise the first model in
+ * the fallback chain that has one. Serving the raw default meant a clone holding
+ * a single provider key opened on a model it could not use: the request still
+ * worked, because the chain drops uncredentialed models, but the picker named the
+ * wrong provider and the reply arrived marked as a fallback from it.
+ */
+export function defaultConfiguredModelId(): string {
+  return resolveChain(DEFAULT_MODEL_ID)[0]?.id ?? DEFAULT_MODEL_ID;
+}
+
+/**
  * What the browser is allowed to know about a model. Deliberately excludes
  * `apiKeyEnvVar` and anything else that hints at server configuration — the client
  * needs labels, prices and context windows to render the usage panel, nothing more.

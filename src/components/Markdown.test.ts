@@ -108,3 +108,19 @@ describe("block grammar", () => {
     expect(nodes.every((n) => n.kind !== "hr")).toBe(true);
   });
 });
+
+describe("backslash escapes", () => {
+  it("takes an escaped asterisk as a literal one, not as emphasis", () => {
+    // Seen in a live answer: the model wrote \*Pro pricing change: …* and the page
+    // showed a stray backslash followed by italic text.
+    expect(inlineTokens("\\*Pro pricing change\\*")).toEqual(["\\*", "Pro pricing change", "\\*"]);
+  });
+
+  it("does not let an escape swallow genuine emphasis after it", () => {
+    expect(inlineTokens("\\$59 is **bold**")).toEqual(["\\$", "59 is ", "**bold**"]);
+  });
+
+  it("leaves ordinary emphasis alone", () => {
+    expect(inlineTokens("*italic* and **bold**")).toEqual(["*italic*", " and ", "**bold**"]);
+  });
+})

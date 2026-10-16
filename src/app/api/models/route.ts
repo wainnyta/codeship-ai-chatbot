@@ -1,4 +1,4 @@
-import { DEFAULT_MODEL_ID, publicModels } from "@/lib/config";
+import { defaultConfiguredModelId, publicModels } from "@/lib/config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,5 +9,5 @@ export const dynamic = "force-dynamic";
  * context windows, never anything about how the server is credentialed.
  */
 export async function GET(): Promise<Response> {
-  return Response.json({ models: publicModels(), defaultModelId: DEFAULT_MODEL_ID });
+  return Response.json({ models: publicModels(), defaultModelId: defaultConfiguredModelId() });
 }

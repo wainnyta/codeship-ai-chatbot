@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   CRITICAL_AT,
   WARN_AT,
@@ -146,5 +146,51 @@ describe("cost formatting", () => {
 
   it("shows a plain zero when nothing was spent", () => {
     expect(formatCost(0)).toBe("$0");
+  });
+});
+
+describe("the picker opens on a model the server can actually use", () => {
+  /** Credentials are read when the config module loads, so each case loads it fresh. */
+  async function withKeys(present: string[]) {
+    const all = ["OPENAI_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY", "ANTHROPIC_API_KEY"];
+    const saved = Object.fromEntries(all.map((k) => [k, process.env[k]]));
+    for (const k of all) {
+      if (present.includes(k)) process.env[k] = "test-key";
+      else delete process.env[k];
+    }
+
+    vi.resetModules();
+    const config = await import("./config");
+    const result = {
+      configured: config.defaultConfiguredModelId(),
+      declared: config.DEFAULT_MODEL_ID,
+    };
+
+    for (const k of all) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+    vi.resetModules();
+    return result;
+  }
+
+  it("opens on the configured default when its key is present", async () => {
+    const { configured, declared } = await withKeys(["OPENAI_API_KEY"]);
+    expect(configured).toBe(declared);
+  });
+
+  it("falls past the configured default when its key is missing", async () => {
+    // A clone holding one provider key should open on that provider, not on a
+    // model the picker would immediately have to fall back from.
+    const { configured, declared } = await withKeys(["GOOGLE_GENERATIVE_AI_API_KEY"]);
+    expect(configured).not.toBe(declared);
+    expect(configured).toBe("gemini-3.8-flash");
+  });
+
+  it("names the declared default when nothing at all is credentialed", async () => {
+    // Nothing usable either way; the endpoint still has to answer with something,
+    // and runChat reports "no provider configured" rather than this being silent.
+    const { configured, declared } = await withKeys([]);
+    expect(configured).toBe(declared);
   });
 });

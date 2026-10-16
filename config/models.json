@@ -1,11 +1,11 @@
 {
   "$comment": "Single source of truth for model metadata (R3). Nothing about a model is hard-coded in src/. Prices are USD per million tokens, taken from each provider's published pricing; re-check them when they change, because every cost figure in the UI is derived from here.",
 
-  "$defaultComment": "Gemini leads on cost by a wide margin ($0.75/$3.75 per Mtok against $2/$10 and $4/$20) and is the only one with a free tier, so it is the default and the head of the fallback chain. All three providers are funded; the chain is ordered cheapest first, so a fallback never silently costs more than it has to.",
-  "defaultModelId": "gemini-3.8-flash",
+  "$defaultComment": "Ordered by MEASURED cost on this workload, not by list price, because the two disagree. Over the six representative questions: GPT-6.1 Sol $0.0041/question and 4.7s, Gemini 3.8 Flash $0.0056 and 8.9s, Claude Opus 5.5 $0.0174 and 4.9s. Gemini has by far the lowest token price and still costs more than GPT, because its thinking tokens are billed as output and it spends roughly seven times as many of them per answer. Re-measure before reordering this; do not reason from the per-million figures alone.",
+  "defaultModelId": "gpt-6.1-sol",
 
-  "$fallbackOrderComment": "Tried in order when the selected model cannot produce a reply. The selected model is always tried first and then skipped here.",
-  "fallbackOrder": ["gemini-3.8-flash", "gpt-6.1-sol", "claude-opus-5-5"],
+  "$fallbackOrderComment": "Tried in order when the selected model cannot produce a reply. The selected model is always tried first and then skipped here. Cheapest measured first, so a fallback never silently costs more than it has to.",
+  "fallbackOrder": ["gpt-6.1-sol", "gemini-3.8-flash", "claude-opus-5-5"],
 
   "$rewriteModelComment": "Used for the pre-retrieval query rewrite that resolves a follow-up (\"how can I use it\", \"and for relay?\") into a standalone search query. It writes nothing the reader sees, so only speed and price matter — but measure rather than assume, because the cheapest per-token model is not the cheapest per rewrite. Measured over three real follow-ups: GPT-6.1 Sol 2519ms / 24 output tokens / $0.00076, Claude Opus 5.5 2855ms / 37 / $0.00247, Gemini 3.8 Flash 4129ms / 412 / $0.00174. Gemini has the lowest token price and the highest bill, because its thinking tokens are billed as output and it spends ~400 of them on a one-line rewrite (thinkingConfig.thinkingBudget: 0 is accepted and ignored on that model). All three resolve these follow-ups correctly, so this is decided on cost and latency alone.",
   "rewriteModelId": "gpt-6.1-sol",
@@ -15,9 +15,10 @@
       "id": "gemini-3.8-flash",
       "provider": "google",
       "label": "Gemini 3.8 Flash",
-      "description": "Google. Fast, and the only one with a free tier, so it is the default and the head of the fallback chain.",
+      "description": "Google. Has a free tier, which makes it the easiest to run this on without a bill.",
       "contextWindow": 1048576,
-      "maxOutputTokens": 4096,
+      "$maxOutputComment": "Thinking tokens count against this, and this model spends most of its budget on them: the six representative questions averaged 1,234 output tokens and peaked at 4,229 for roughly 270 tokens of visible answer. At 4,096 that peak was truncated mid-table and the reader was told the answer was cut off. The cap is a guard against a runaway, not a shape for the answer, so it is set well clear of the peak — nothing is billed that is not generated.",
+      "maxOutputTokens": 16384,
       "$pricingComment": "Promotional rate through 2026-12-31; both double on 2027-01-01 ($1.50 / $7.50). Output price includes thinking tokens.",
       "pricing": { "inputPerMillion": 0.75, "outputPerMillion": 3.75 },
       "apiKeyEnvVar": "GOOGLE_GENERATIVE_AI_API_KEY"
@@ -28,7 +29,8 @@
       "label": "Claude Opus 5.5",
       "description": "Anthropic. Strongest at noticing where two documents disagree and saying so.",
       "contextWindow": 1000000,
-      "maxOutputTokens": 4096,
+      "$maxOutputComment": "Peaked at 955 output tokens over the representative questions. Headroom costs nothing, so the cap sits clear of it.",
+      "maxOutputTokens": 8192,
       "pricing": { "inputPerMillion": 4.0, "outputPerMillion": 20.0 },
       "apiKeyEnvVar": "ANTHROPIC_API_KEY",
       "$providerOptionsComment": "Thinking cannot be disabled on this model and defaults to medium effort. Left alone, a thinking pause precedes the first visible token, which undercuts word-by-word streaming (R1). This workload is short extraction over passages already in the prompt, so low effort is correct.",
@@ -40,9 +42,10 @@
       "id": "gpt-6.1-sol",
       "provider": "openai",
       "label": "GPT-6.1 Sol",
-      "description": "OpenAI. Balanced speed and reasoning; good at structured tier-by-tier comparisons.",
+      "description": "OpenAI. Cheapest and fastest here by measurement, and the default.",
       "contextWindow": 1050000,
-      "maxOutputTokens": 4096,
+      "$maxOutputComment": "Leanest of the three: peaked at 435 output tokens over the representative questions.",
+      "maxOutputTokens": 8192,
       "pricing": { "inputPerMillion": 2.0, "outputPerMillion": 10.0 },
       "apiKeyEnvVar": "OPENAI_API_KEY"
     }

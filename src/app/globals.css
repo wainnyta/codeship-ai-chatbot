@@ -77,35 +77,66 @@ input {
   border-inline: 1px solid var(--rule);
 }
 
+/*
+ * The bar carries the assistant's identity: Nibo, then what Nibo is. Everything in
+ * it sits on one centre line, so the avatar, the name and the button read as a
+ * single row rather than three things that happen to be at the top.
+ *
+ * The weight comes from a quiet gradient and a hairline highlight along the bottom
+ * edge rather than from a shadow. A shadow would lift the bar off the page; this
+ * reads as the page's own surface being slightly denser where the chrome lives,
+ * which is what the rest of this interface does — nothing floats.
+ */
 .topbar {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 16px;
-  padding: 16px 24px 14px;
-  border-bottom: 1px solid var(--rule);
+  padding: 13px 24px;
+  background: linear-gradient(180deg, #ffffff 0%, #f3f5f9 100%);
+  border-bottom: 1px solid #d3dae4;
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .titles {
+  display: flex;
+  align-items: center;
+  gap: 11px;
   margin-right: auto;
   min-width: 0;
 }
 
+.titles .nibo {
+  flex: none;
+}
+
 .titles h1 {
   font-family: var(--serif);
-  font-size: 21px;
+  font-size: 19px;
   font-weight: 600;
   letter-spacing: -0.01em;
   margin: 0;
+  line-height: 1.15;
+}
+
+.titles p {
+  margin: 1px 0 0;
+  font-family: var(--sans);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.015em;
+  color: var(--slate);
   line-height: 1.2;
 }
 
 .ghost-button {
-  background: none;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  padding: 7px 12px;
+  background: var(--surface);
+  border: 1px solid #d3dae4;
+  border-radius: 6px;
+  padding: 7px 13px;
   cursor: pointer;
   color: var(--slate);
+  box-shadow: 0 1px 1px rgba(21, 29, 42, 0.04);
+  transition: border-color 120ms ease, color 120ms ease;
 }
 
 .ghost-button:hover:not(:disabled) {
