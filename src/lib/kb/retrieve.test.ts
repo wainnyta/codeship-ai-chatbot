@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { getIndex } from "./index";
-import { MAX_CONFLICTS, comparable, findProduct, productOf, resolveProduct } from "./retrieve";
+import {
+  MAX_CONFLICTS,
+  comparable,
+  findProduct,
+  findProducts,
+  productOf,
+  resolveProduct,
+  resolveProducts,
+} from "./retrieve";
 
 const index = getIndex();
 
@@ -186,5 +194,103 @@ describe("E2 — the relevance floor", () => {
     const result = index.search("Does Nimbus Relay support Kubernetes?");
     expect(result.empty).toBe(false);
     expect(result.passages.map((p) => p.chunk.file)).toContain("relay.md");
+  });
+});
+
+describe("passage count follows the evidence, not a fixed slice", () => {
+  it("returns only the handful of passages that are actually about a 403", () => {
+    // This used to return eight passages every time, including Relay's pricing
+    // table and SLA grid — neither of which has anything to do with a 403.
+    const result = index.search("A client is getting a 403 on the Relay API. What should they check first?");
+
+    expect(result.passages.length).toBeLessThan(5);
+    expect(result.passages.map((p) => p.chunk.id)).toContain("relay.md#troubleshooting");
+    expect(result.passages.map((p) => p.chunk.id)).not.toContain("relay.md#pricing");
+    expect(result.passages.map((p) => p.chunk.id)).not.toContain("relay.md#support-sla");
+  });
+
+  it("still returns breadth for a question that spans the product line", () => {
+    // The cutoff must not starve a "which products" question of products.
+    const result = index.search("Which of our products support SSO via SAML 2.0?");
+    const files = new Set(result.passages.map((p) => p.chunk.file));
+
+    expect(result.passages.length).toBeGreaterThan(4);
+    expect(files.size).toBeGreaterThanOrEqual(4);
+  });
+
+  it("asks for different numbers of passages for different questions", () => {
+    const narrow = index.search("A client is getting a 403 on the Relay API. What should they check first?");
+    const broad = index.search("Which of our products support SSO via SAML 2.0?");
+    expect(narrow.passages.length).not.toBe(broad.passages.length);
+  });
+});
+
+describe("a question about one product does not cite another product's documents", () => {
+  it("answers a Vault SLA question from Vault and company-wide documents only", () => {
+    // Pulse's, Ledger's and Relay's SLA tables are other products' numbers, not
+    // sources for a question about Vault.
+    const result = index.search("What's the SLA for Priority 1 tickets on Nimbus Vault?");
+    const files = result.passages.map((p) => p.chunk.file);
+
+    expect(files).toContain("vault.md");
+    expect(files.some((f) => f.startsWith("pulse"))).toBe(false);
+    expect(files.some((f) => f.startsWith("ledger"))).toBe(false);
+    expect(files.some((f) => f.startsWith("relay"))).toBe(false);
+  });
+
+  it("keeps company-wide documents in scope", () => {
+    const result = index.search("What's the SLA for Priority 1 tickets on Nimbus Vault?");
+    expect(result.passages.map((p) => p.chunk.file)).toContain("support-policy.md");
+  });
+
+  it("does not narrow a question that names two products", () => {
+    const result = index.search("How does Vault's SLA compare to Relay's?");
+    const files = result.passages.map((p) => p.chunk.file);
+
+    expect(files).toContain("vault.md");
+    expect(files).toContain("relay.md");
+  });
+
+  it("finds every product named, not only the last one", () => {
+    expect(findProducts("How does Vault compare to Relay?").sort()).toEqual(["relay", "vault"]);
+    expect(findProducts("Tell me about pricing")).toEqual([]);
+  });
+
+  it("falls back to the carried product only when the question names none", () => {
+    expect(resolveProducts("what about its SLA?", ["Tell me about Vault"])).toEqual(["vault"]);
+    expect(resolveProducts("compare Vault and Relay", ["Tell me about Pulse"]).sort()).toEqual([
+      "relay",
+      "vault",
+    ]);
+  });
+});
+
+describe("questions about the corpus itself", () => {
+  it("answers 'what products do we have' instead of refusing", () => {
+    // This used to be refused with a message that itself named all four products:
+    // every word of the question except "products" is a stopword, so the two-term
+    // floor rejected it.
+    const result = index.search("what are the products that nimbus have");
+
+    expect(result.empty).toBe(false);
+    expect(result.passages.map((p) => p.chunk.file)).toContain("security-overview.md");
+  });
+
+  it("answers the same question without the company name", () => {
+    expect(index.search("what are the products that we have?").empty).toBe(false);
+  });
+
+  it("reaches documents covering every product", () => {
+    const result = index.search("what products does NimbusStack sell?");
+    const text = result.passages.map((p) => p.chunk.text + p.chunk.docTitle).join(" ").toLowerCase();
+
+    for (const product of ["relay", "vault", "pulse", "ledger"]) {
+      expect(text).toContain(product);
+    }
+  });
+
+  it("still refuses questions the corpus genuinely cannot answer", () => {
+    expect(index.search("What is the capital of France?").empty).toBe(true);
+    expect(index.search("How do I configure nginx reverse proxy headers?").empty).toBe(true);
   });
 });

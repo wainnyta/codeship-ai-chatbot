@@ -28,7 +28,10 @@ const STOPWORDS = new Set([
   "get","getting","has","have","how","i","if","in","is","it","its","me","my","of","on",
   "or","our","should","so","that","the","their","them","then","there","they","this",
   "to","us","was","we","what","when","where","which","who","why","will","with","you",
-  "your","first","check","tell","need","want","about","please","question","nimbus",
+  "your","first","check","tell","need","want","about","please","question",
+  // "nimbus" is deliberately NOT a stopword. It matches nearly every chunk so it
+  // barely moves the ranking, but it is evidence the question is about this
+  // corpus — which the relevance floor needs.
 ]);
 
 /**
@@ -47,6 +50,12 @@ const PHRASE_SYNONYMS: Array<[RegExp, string[]]> = [
   [/\bsecret|credential|certificate\b/i, ["secrets", "credentials"]],
   [/\baudit\b/i, ["audit", "log", "retention"]],
   [/\brate limit|throttl|429\b/i, ["rate", "limit", "429"]],
+  // "What products do we have?" is a fair question about this corpus, and one the
+  // corpus can answer — but it shares almost no vocabulary with any document, so
+  // the relevance floor used to refuse it while the refusal text itself listed the
+  // four products. The roster needs vocabulary like any other topic.
+  [/\bproducts?\b|product line|portfolio|what do (we|you) (sell|offer)|catalogue?|line[- ]?up/i,
+   ["relay", "vault", "pulse", "ledger", "nimbus", "product"]],
 ];
 
 const TERM_SYNONYMS: Record<string, string[]> = {
@@ -94,6 +103,28 @@ export function findProduct(text: string): string | null {
 }
 
 /**
+ * Every product named in the text, not just the last one. A question naming two
+ * products is a comparison, and must not be narrowed to either of them.
+ */
+export function findProducts(text: string): string[] {
+  const lower = text.toLowerCase();
+  return PRODUCTS.filter((p) => lower.includes(p));
+}
+
+/**
+ * The products a question is scoped to: those it names, or — when it names none —
+ * the single most recent one from earlier turns, so "what about its SLA?" stays on
+ * topic.
+ */
+export function resolveProducts(query: string, history: string[]): string[] {
+  const named = findProducts(query);
+  if (named.length) return named;
+
+  const carried = resolveProduct(query, history);
+  return carried ? [carried] : [];
+}
+
+/**
  * Resolve the product a question is about, inheriting from earlier turns when the
  * question itself names none — so "what about its SLA?" after a Relay question
  * still retrieves Relay. Deterministic, and costs no extra model call.
@@ -125,9 +156,16 @@ function meaningfulTerms(terms: string[]): string[] {
  * Company-wide documents are left unboosted but not penalised, so cross-product
  * material still surfaces alongside.
  */
-function productBoost(chunk: Chunk, product: string | null): number {
-  if (!product) return 1;
-  return chunk.file.startsWith(product) ? 2.5 : 1;
+function productBoost(chunk: Chunk, products: string[]): number {
+  if (!products.length) return 1;
+  return products.some((p) => chunk.file.startsWith(p)) ? 2.5 : 1;
+}
+
+/** Whether a chunk can be a source for a question scoped to these products. */
+function inScope(chunk: Chunk, products: string[]): boolean {
+  if (products.length !== 1) return true;
+  const owner = productOf(chunk.file);
+  return owner === null || owner === products[0];
 }
 
 interface IndexedChunk {
@@ -198,16 +236,30 @@ export class KnowledgeBaseIndex {
   ): RetrievalResult {
     const { history = [], limit = 8 } = options;
 
-    const product = resolveProduct(query, history);
-    // A carried-over product is appended so retrieval sees it even though the user
-    // never typed it in this message.
-    const effectiveQuery = product ? `${query} ${product}` : query;
-    const terms = expandQuery(effectiveQuery);
+    const products = resolveProducts(query, history);
+    const product = products.length === 1 ? products[0] : null;
+    const allTerms = expandQuery(products.length ? `${query} ${products.join(" ")}` : query);
+
+    /**
+     * Once a product is resolved it is handled by the boost below, so counting it
+     * again as a search term double-counts it. That double-count was dragging every
+     * document of the right product into the results regardless of topic: a 403
+     * question returned Relay's pricing table and SLA grid, which score well on
+     * "relay" and nothing else. Scoring on topic alone and letting the boost carry
+     * the product keeps the two signals separate.
+     */
+    const terms = allTerms.filter((t) => !products.includes(t));
 
     const ranked = this.docs
+      // A question about exactly one product cannot be answered from a different
+      // product's documents, so they are not sources for it: a Vault SLA question
+      // was returning Pulse's, Ledger's and Relay's SLA tables, which are simply
+      // other products' numbers. Company-wide documents always stay. A question
+      // naming two products is a comparison and is never narrowed.
+      .filter((doc) => inScope(doc.chunk, products))
       .map((doc) => {
         const { score, matched } = this.score(doc, terms);
-        return { chunk: doc.chunk, score: score * productBoost(doc.chunk, product), matched };
+        return { chunk: doc.chunk, score: score * productBoost(doc.chunk, products), matched };
       })
       .filter((r) => r.score > 0)
       .sort((a, b) => b.score - a.score);
@@ -219,12 +271,26 @@ export class KnowledgeBaseIndex {
     // terms on one passage separates a real question from a coincidence. Below the
     // floor the caller answers "not in the knowledge base" without calling a provider,
     // so the honest answer is also the cheapest path.
-    const clearsFloor = ranked.some((r) => meaningfulTerms(r.matched).length >= 2);
+    // Naming a product is itself evidence the question is about this corpus, and
+    // the product no longer appears in `terms`, so it cannot be counted there. The
+    // two-term bar exists to reject questions that only brush the corpus by
+    // accident ("nginx reverse proxy headers" catching `headers`); a question that
+    // names Relay has already cleared that bar.
+    const required = products.length ? 1 : 2;
+    const clearsFloor = ranked.some((r) => meaningfulTerms(r.matched).length >= required);
     if (!clearsFloor) {
       return { passages: [], conflicts: [], empty: true, product };
     }
 
-    const passages = ranked.slice(0, limit);
+    // `limit` is a ceiling, not a target. Taking a fixed slice meant every answer
+    // cited exactly eight passages whether or not eight were relevant, so a 403
+    // question listed the pricing table as a source. Scores fall off a cliff after
+    // the genuinely relevant hits, so anything far below the best match is tail.
+    const best = ranked[0].score;
+    const passages = ranked
+      .filter((r) => r.score >= best * RELEVANCE_FLOOR)
+      .slice(0, limit);
+
     return {
       passages,
       conflicts: detectConflicts(passages, (t) => this.idf(t)),
@@ -262,6 +328,13 @@ export function comparable(fileA: string, fileB: string): boolean {
   if (a && b) return a === b;
   return true; // at least one is company-wide
 }
+
+/**
+ * How far below the best match a passage may score and still count as a source.
+ * Measured against the corpus: genuinely relevant hits sit above ~24% of the top
+ * score and the irrelevant tail sits at ~18%, so this sits in the gap between them.
+ */
+export const RELEVANCE_FLOOR = 0.22;
 
 /** Most specific candidate pairs to report. Beyond a handful, a flag is noise. */
 export const MAX_CONFLICTS = 3;

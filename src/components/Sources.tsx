@@ -20,11 +20,14 @@ import { Markdown } from "./Markdown";
 export function Sources({
   passages,
   conflicts,
+  answer,
   focusId,
   focusNonce = 0,
 }: {
   passages: PassageView[];
   conflicts: Array<[string, string]>;
+  /** The answer text, read for the citations it actually made. */
+  answer: string;
   /** A citation the reader clicked in the answer; opens straight to that passage. */
   focusId?: string | null;
   /** Bumped on every click, so clicking the same citation twice jumps again. */
@@ -32,6 +35,7 @@ export function Sources({
 }) {
   const flagged = new Set(conflicts.flat());
   const [open, setOpen] = useState(false);
+  const [showUncited, setShowUncited] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   /** Passages the reader switched back to verbatim markdown source. */
   const [raw, setRaw] = useState<Set<string>>(new Set());
@@ -53,8 +57,24 @@ export function Sources({
 
   if (!passages.length) return null;
 
-  const documents = new Set(passages.map((p) => p.file));
-  const flaggedCount = passages.filter((p) => flagged.has(p.id)).length;
+  /**
+   * What the answer actually leaned on, versus what retrieval merely considered.
+   * Listing every retrieved passage as a "source" overstates the answer's basis —
+   * a reader checking a figure wants the passage the claim came from, not the
+   * seven others the search looked at. Falls back to showing everything while the
+   * reply is still streaming and has not cited anything yet.
+   */
+  const citedIds = new Set(
+    Array.from(answer.matchAll(/\[([a-z0-9][a-z0-9-]*\.md#[a-z0-9-]+)\]/gi)).map((m) =>
+      m[1].toLowerCase(),
+    ),
+  );
+  const cited = passages.filter((p) => citedIds.has(p.id.toLowerCase()));
+  const shown = cited.length ? cited : passages;
+  const uncited = cited.length ? passages.filter((p) => !citedIds.has(p.id.toLowerCase())) : [];
+
+  const documents = new Set(shown.map((p) => p.file));
+  const flaggedCount = shown.filter((p) => flagged.has(p.id)).length;
 
   const toggleRaw = (id: string) =>
     setRaw((prev) => {
@@ -82,7 +102,8 @@ export function Sources({
       >
         <span className={open ? "chev open" : "chev"} aria-hidden="true" />
         <strong>
-          {passages.length} {passages.length === 1 ? "passage" : "passages"}
+          {shown.length} {shown.length === 1 ? "passage" : "passages"}
+          {cited.length ? " cited" : ""}
         </strong>
         <span className="sources-from">
           from {documents.size} {documents.size === 1 ? "document" : "documents"}
@@ -93,7 +114,7 @@ export function Sources({
 
       {open ? (
         <div className="sources-list">
-          {passages.map((p) => {
+          {shown.map((p) => {
             const isOpen = expanded.has(p.id);
             return (
               <div
@@ -130,6 +151,39 @@ export function Sources({
               </div>
             );
           })}
+
+          {uncited.length ? (
+            <div className="uncited">
+              <button
+                type="button"
+                className="uncited-toggle"
+                onClick={() => setShowUncited((v) => !v)}
+                aria-expanded={showUncited}
+              >
+                {showUncited ? "hide" : "show"} {uncited.length} searched but not cited
+              </button>
+              {showUncited
+                ? uncited.map((p) => (
+                    <div key={p.id} id={`passage-${p.id}`} className="source muted">
+                      <button type="button" className="source-head" onClick={() => toggle(p.id)}>
+                        <span className="source-id">{p.id}</span>
+                        <span className="source-where">
+                          {p.docTitle} — {p.heading}
+                        </span>
+                        {p.docDate ? <span className="source-date">{p.docDate}</span> : null}
+                      </button>
+                      {expanded.has(p.id) ? (
+                        <div className="source-body">
+                          <div className="md source-md">
+                            <Markdown text={p.text} />
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  ))
+                : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

@@ -832,3 +832,28 @@ input {
     scroll-behavior: auto !important;
   }
 }
+
+/* Retrieved but not cited: kept reachable for anyone auditing the search, but
+   visibly secondary — these are not what the answer rests on. */
+.uncited {
+  margin-top: 4px;
+}
+
+.uncited-toggle {
+  background: none;
+  border: none;
+  padding: 4px 2px;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--slate);
+}
+
+.uncited-toggle:hover {
+  color: var(--cite);
+}
+
+.source.muted {
+  border-left-color: var(--rule);
+  opacity: 0.72;
+}

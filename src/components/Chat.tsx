@@ -359,6 +359,7 @@ export function Chat() {
               <Sources
                 passages={turn.passages}
                 conflicts={turn.conflicts}
+                answer={turn.answer}
                 focusId={focus?.turnId === turn.id ? focus.passageId : null}
                 focusNonce={focus?.turnId === turn.id ? focus.nonce : 0}
               />
