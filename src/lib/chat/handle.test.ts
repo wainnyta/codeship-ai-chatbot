@@ -193,6 +193,28 @@ describe("R2 — retrieved sources travel with every answer", () => {
     expect(ids).toContain("relay.md#troubleshooting");
   });
 
+  it("E1: a bare follow-up does not inherit a product the assistant merely mentioned", async () => {
+    // An answer listing every product would otherwise hand the follow-up whichever
+    // one it named last, turning "what about its SLA?" into a Ledger question.
+    const fake = makeFake({});
+    const { events } = await post(
+      [
+        { role: "user", content: "What does Nimbus Vault cost?" },
+        {
+          role: "assistant",
+          content: "NimbusStack has four products: Nimbus Relay, Nimbus Vault, Nimbus Pulse and Nimbus Ledger.",
+        },
+        { role: "user", content: "what about its SLA?" },
+      ],
+      GEMINI,
+      fake,
+    );
+
+    const files = find(events, "meta")!.passages.map((p) => p.file);
+    expect(files).toContain("vault.md");
+    expect(files.some((f) => f.startsWith("ledger"))).toBe(false);
+  });
+
   it("E1: a bare follow-up inherits the product from earlier turns", async () => {
     const fake = makeFake({});
     const { events } = await post(

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { PassageView } from "@/lib/providers/types";
+import { citedIds } from "@/lib/citations";
 import { Markdown } from "./Markdown";
 
 /**
@@ -64,14 +65,10 @@ export function Sources({
    * seven others the search looked at. Falls back to showing everything while the
    * reply is still streaming and has not cited anything yet.
    */
-  const citedIds = new Set(
-    Array.from(answer.matchAll(/\[([a-z0-9][a-z0-9-]*\.md#[a-z0-9-]+)\]/gi)).map((m) =>
-      m[1].toLowerCase(),
-    ),
-  );
-  const cited = passages.filter((p) => citedIds.has(p.id.toLowerCase()));
+  const ids = citedIds(answer);
+  const cited = passages.filter((p) => ids.has(p.id.toLowerCase()));
   const shown = cited.length ? cited : passages;
-  const uncited = cited.length ? passages.filter((p) => !citedIds.has(p.id.toLowerCase())) : [];
+  const uncited = cited.length ? passages.filter((p) => !ids.has(p.id.toLowerCase())) : [];
 
   const documents = new Set(shown.map((p) => p.file));
   const flaggedCount = shown.filter((p) => flagged.has(p.id)).length;

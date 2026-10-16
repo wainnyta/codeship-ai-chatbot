@@ -36,7 +36,7 @@ Open http://localhost:3000.
 npm test
 ```
 
-63 tests, no network and no API key required.
+100 tests, no network and no API key required.
 
 ---
 
@@ -117,7 +117,7 @@ The context meter warns at 75% (amber) and 90% (red), and recomputes the moment 
 
 ## Testing
 
-Two seams, 63 tests, no network access or API key needed.
+Two seams, 100 tests, no network access or API key needed.
 
 **The chat endpoint** is driven over its real HTTP contract with a fake provider injected at the registry boundary — configuration, not module patching, so the seam stays a genuine boundary. Tests assert what a caller can observe rather than how the internals are arranged, which means the retriever can be rewritten without rewriting the tests. Covered: the six representative questions' retrieval, conflict flagging, empty input reaching no provider, off-corpus questions reaching no provider, silent pre-latch fallback, no fallback after flush and no mixing of two models' text, estimated usage on an aborted stream, truncation, rate-limit messaging, and per-model cost.
 
@@ -159,7 +159,7 @@ docs/specs/                 the design spec this was built from
 Left deliberately, and worth arguing about:
 
 - **No conversation persistence.** Out of scope per the brief. Refreshing loses the session.
-- **Conflict detection is a candidate finder.** It can flag passages that turn out to agree. The prompt instructs the model to stay quiet in that case, but the amber banner is driven by retrieval, so it can appear above an answer that reports no actual conflict.
+- **Conflict detection is a candidate finder.** It can flag passages that turn out to agree. The prompt instructs the model to stay quiet in that case, and the amber banner only appears when the answer cited *both* sides of a flagged pair — so a candidate the answer never used stays silent. Residual false positives are still possible when an answer legitimately cites two documents covering the same ground that do in fact agree.
 - **The relevance floor is a heuristic** — two distinct meaningful terms on one passage. It is tuned against the six representative questions and could be wrong at the margins in both directions.
 - **Topic carry inherits the most recently mentioned product.** Clean for a follow-up about one product; a conversation ranging across two could inherit the wrong one.
 - **No "continue" for truncated replies**, only resend.

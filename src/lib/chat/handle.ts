@@ -92,7 +92,15 @@ export async function handleChatRequest(request: Request, deps: ChatDeps): Promi
 
   const index = deps.index ?? getIndex();
   const history = messages.slice(0, -1);
-  const retrieval = index.search(question, { history: history.map((m) => m.content) });
+
+  // Topic carry reads the user's own earlier questions, not the assistant's
+  // replies. An answer that lists all four products would otherwise hand the next
+  // follow-up whichever product it happened to mention last — so "what about its
+  // SLA?" after "we sell Relay, Vault, Pulse and Ledger" would silently become a
+  // question about Ledger.
+  const retrieval = index.search(question, {
+    history: history.filter((m) => m.role === "user").map((m) => m.content),
+  });
 
   // E2. Nothing in the corpus is relevant, so the honest answer is produced here —
   // no provider call, no tokens, no cost, and no opportunity to invent anything.

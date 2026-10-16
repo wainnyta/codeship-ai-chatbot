@@ -6,6 +6,7 @@ import { ModelPicker } from "./ModelPicker";
 import { Sources } from "./Sources";
 import type { PublicModel } from "@/lib/config";
 import type { AnsweringModel, PassageView, StreamEvent } from "@/lib/providers/types";
+import { activeConflicts } from "@/lib/citations";
 import { type Usage, contextStatus, estimateTokens, formatCost, sumUsage } from "@/lib/usage";
 
 interface Turn {
@@ -320,12 +321,17 @@ export function Chat() {
           </div>
         ) : null}
 
-        {turns.map((turn) => (
+        {turns.map((turn) => {
+          // Only the disagreements the answer actually worked across, never the
+          // candidates retrieval merely considered.
+          const conflicts = activeConflicts(turn.conflicts, turn.answer);
+
+          return (
           <article className="turn" key={turn.id}>
             <h2 className="question">{turn.question}</h2>
 
             <div className="answer">
-              {turn.conflicts.length ? (
+              {conflicts.length ? (
                 <div className="banner conflict">
                   <h4>These documents don&rsquo;t agree</h4>
                   <p>
@@ -358,7 +364,7 @@ export function Chat() {
 
               <Sources
                 passages={turn.passages}
-                conflicts={turn.conflicts}
+                conflicts={conflicts}
                 answer={turn.answer}
                 focusId={focus?.turnId === turn.id ? focus.passageId : null}
                 focusNonce={focus?.turnId === turn.id ? focus.nonce : 0}
@@ -390,7 +396,8 @@ export function Chat() {
               ) : null}
             </div>
           </article>
-        ))}
+          );
+        })}
       </div>
 
       <div className="usage">
