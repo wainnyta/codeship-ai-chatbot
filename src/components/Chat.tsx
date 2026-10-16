@@ -6,7 +6,7 @@ import { ModelPicker } from "./ModelPicker";
 import { Sources } from "./Sources";
 import type { PublicModel } from "@/lib/config";
 import type { AnsweringModel, PassageView, StreamEvent } from "@/lib/providers/types";
-import { activeConflicts } from "@/lib/citations";
+import { activeConflicts, declaresConflict, stripConflictMarker } from "@/lib/citations";
 import { type Usage, contextStatus, estimateTokens, formatCost, sumUsage } from "@/lib/usage";
 
 interface Turn {
@@ -322,16 +322,19 @@ export function Chat() {
         ) : null}
 
         {turns.map((turn) => {
-          // Only the disagreements the answer actually worked across, never the
-          // candidates retrieval merely considered.
-          const conflicts = activeConflicts(turn.conflicts, turn.answer);
+          // The answer decides whether a disagreement is real; retrieval only ever
+          // produced candidates, and candidates differ run to run depending on
+          // which passages a generation happens to cite.
+          const declared = declaresConflict(turn.answer);
+          const answerText = stripConflictMarker(turn.answer);
+          const conflicts = declared ? activeConflicts(turn.conflicts, turn.answer) : [];
 
           return (
           <article className="turn" key={turn.id}>
             <h2 className="question">{turn.question}</h2>
 
             <div className="answer">
-              {conflicts.length ? (
+              {declared ? (
                 <div className="banner conflict">
                   <h4>These documents don&rsquo;t agree</h4>
                   <p>
@@ -343,7 +346,7 @@ export function Chat() {
               ) : null}
 
               <Answer
-                text={turn.answer}
+                text={answerText}
                 streaming={turn.streaming}
                 onCite={(id) => jumpToPassage(turn.id, id)}
               />
@@ -365,7 +368,7 @@ export function Chat() {
               <Sources
                 passages={turn.passages}
                 conflicts={conflicts}
-                answer={turn.answer}
+                answer={answerText}
                 focusId={focus?.turnId === turn.id ? focus.passageId : null}
                 focusNonce={focus?.turnId === turn.id ? focus.nonce : 0}
               />

@@ -27,3 +27,32 @@ export function activeConflicts(
   const cited = citedIds(answer);
   return conflicts.filter(([a, b]) => cited.has(a.toLowerCase()) && cited.has(b.toLowerCase()));
 }
+
+/** Marker the model emits when it is reporting a genuine contradiction. */
+const CONFLICT_MARKER = /^\s*\[\[CONFLICT\]\]\s*/i;
+
+/**
+ * Whether the answer itself reports a disagreement.
+ *
+ * Retrieval can only find passages that cover the same ground; it cannot tell
+ * agreement from disagreement, and the difference is semantic. A company-wide
+ * policy defining "business hours" and a product's SLA table using them share
+ * every meaningful term and contradict nothing — yet they scored as a candidate
+ * pair, and the warning fired above an answer reporting no conflict at all.
+ * Worse, it fired for one model and not another on the same question, because it
+ * depended on which passages each happened to cite.
+ *
+ * Only something that has read both passages can judge this, so the model
+ * declares it and the banner reports that judgement. Retrieval's candidates still
+ * go into the prompt — that is what makes the model look — but they no longer
+ * speak to the reader directly. If the model omits the marker we under-warn,
+ * which is the safe direction: its prose still spells the disagreement out.
+ */
+export function declaresConflict(answer: string): boolean {
+  return CONFLICT_MARKER.test(answer);
+}
+
+/** The answer as the reader should see it, with the marker removed. */
+export function stripConflictMarker(answer: string): string {
+  return answer.replace(CONFLICT_MARKER, "");
+}

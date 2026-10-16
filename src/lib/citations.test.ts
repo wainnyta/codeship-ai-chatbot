@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activeConflicts, citedIds } from "./citations";
+import { activeConflicts, citedIds, declaresConflict, stripConflictMarker } from "./citations";
 
 const VAULT_CONFLICT: Array<[string, string]> = [
   ["security-overview.md#identity", "vault.md#pricing"],
@@ -48,5 +48,35 @@ describe("activeConflicts", () => {
     expect(activeConflicts(conflicts, answer)).toEqual([
       ["security-overview.md#identity", "vault.md#pricing"],
     ]);
+  });
+});
+
+describe("the answer declares whether a disagreement is real", () => {
+  it("recognises the marker at the start of a reply", () => {
+    expect(declaresConflict("[[CONFLICT]]\nVault's SAML tier is stated two ways.")).toBe(true);
+  });
+
+  it("is false for an answer that reports no disagreement", () => {
+    // The reported case: a company-wide policy defining "business hours" and a
+    // product's SLA table using them share every meaningful term and contradict
+    // nothing, but scored as a conflict candidate.
+    expect(declaresConflict("Vault's P1 SLA is 1 hour on Pro [vault.md#support-sla].")).toBe(false);
+  });
+
+  it("is false while a reply is still empty", () => {
+    expect(declaresConflict("")).toBe(false);
+  });
+
+  it("does not fire on the word conflict in ordinary prose", () => {
+    expect(declaresConflict("There is no conflict between these documents.")).toBe(false);
+  });
+
+  it("removes the marker before the reader sees it", () => {
+    expect(stripConflictMarker("[[CONFLICT]]\nBoth documents differ.")).toBe("Both documents differ.");
+  });
+
+  it("leaves an unmarked answer untouched", () => {
+    const answer = "Vault costs $12 on Starter.";
+    expect(stripConflictMarker(answer)).toBe(answer);
   });
 });
