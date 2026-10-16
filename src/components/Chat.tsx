@@ -263,9 +263,17 @@ export function Chat() {
     URL.revokeObjectURL(url);
   };
 
-  const jumpToPassage = (id: string) => {
-    document.getElementById(`passage-${id}`)?.scrollIntoView({ block: "center" });
-  };
+  /**
+   * Which citation the reader last clicked, and a nonce so clicking the same chip
+   * twice re-triggers the jump. Scoped to a turn, because the same passage id can
+   * appear in several answers in one conversation.
+   */
+  const [focus, setFocus] = useState<{ turnId: string; passageId: string; nonce: number } | null>(
+    null,
+  );
+
+  const jumpToPassage = (turnId: string, passageId: string) =>
+    setFocus((prev) => ({ turnId, passageId, nonce: (prev?.nonce ?? 0) + 1 }));
 
   return (
     <div className="app">
@@ -344,7 +352,11 @@ export function Chat() {
                 </div>
               ) : null}
 
-              <Answer text={turn.answer} streaming={turn.streaming} onCite={jumpToPassage} />
+              <Answer
+                text={turn.answer}
+                streaming={turn.streaming}
+                onCite={(id) => jumpToPassage(turn.id, id)}
+              />
 
               {turn.truncated ? (
                 <div className="banner fault">
@@ -360,7 +372,12 @@ export function Chat() {
                 </div>
               ) : null}
 
-              <Sources passages={turn.passages} conflicts={turn.conflicts} />
+              <Sources
+                passages={turn.passages}
+                conflicts={turn.conflicts}
+                focusId={focus?.turnId === turn.id ? focus.passageId : null}
+                focusNonce={focus?.turnId === turn.id ? focus.nonce : 0}
+              />
 
               {turn.model || turn.usage ? (
                 <div className="answer-meta">

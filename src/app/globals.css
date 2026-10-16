@@ -298,26 +298,72 @@ input {
   max-width: var(--measure);
 }
 
-.sources-head {
+/* One compact line by default. Eight expanded passages pushed the answer itself
+   off screen, which is the opposite of what a reader mid-call needs. */
+.sources-summary {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
+  width: 100%;
+  background: none;
+  border: none;
+  border-top: 1px solid var(--cite-wash);
+  padding: 8px 2px 0;
+  cursor: pointer;
   font-size: 12.5px;
   color: var(--cite);
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--cite-wash);
-  margin-bottom: 10px;
+  text-align: left;
 }
 
-.sources-head strong {
+.sources-summary:hover {
+  color: var(--ink);
+}
+
+.sources-summary strong {
   font-weight: 600;
+}
+
+.sources-from {
+  color: var(--slate);
+}
+
+.sources-flagged {
+  color: var(--conflict);
+  border: 1px solid var(--conflict);
+  border-radius: 2px;
+  padding: 0 5px;
+  font-size: 11px;
+}
+
+.sources-hint {
+  margin-left: auto;
+  color: var(--slate);
+  font-size: 11.5px;
+}
+
+.chev {
+  width: 0;
+  height: 0;
+  border-left: 5px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transition: transform 0.15s ease;
+  flex: none;
+}
+
+.chev.open {
+  transform: rotate(90deg);
+}
+
+.sources-list {
+  margin-top: 10px;
 }
 
 .source {
   border: 1px solid var(--rule);
   border-left: 2px solid var(--cite);
   border-radius: 0 var(--radius) var(--radius) 0;
-  margin-bottom: 7px;
+  margin-bottom: 5px;
   background: var(--surface);
 }
 
@@ -333,9 +379,12 @@ input {
   background: none;
   border: none;
   text-align: left;
-  padding: 8px 11px;
+  padding: 7px 11px;
   cursor: pointer;
-  flex-wrap: wrap;
+  /* No wrapping: a long passage id used to break the row and push its date onto
+     a second line, so every source cost twice the height it needed. */
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .source-head:hover {
@@ -346,11 +395,18 @@ input {
   font-family: var(--mono);
   font-size: 11.5px;
   color: var(--cite);
+  white-space: nowrap;
+  flex: none;
 }
 
+/* The one element allowed to give way when the row is tight. */
 .source-where {
   font-size: 12.5px;
   color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 /* Dates earn their prominence: comparing them is how a reader settles a conflict. */
@@ -359,6 +415,8 @@ input {
   font-family: var(--mono);
   font-size: 11px;
   color: var(--slate);
+  white-space: nowrap;
+  flex: none;
 }
 
 .source-text {
