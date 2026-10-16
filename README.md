@@ -36,7 +36,7 @@ Open http://localhost:3000.
 npm test
 ```
 
-139 tests, no network and no API key required.
+142 tests, no network and no API key required.
 
 ---
 
@@ -139,7 +139,7 @@ The context meter warns at 75% (amber) and 90% (red), and recomputes the moment 
 
 ## Testing
 
-Two seams, 139 tests, no network access or API key needed.
+Two seams, 142 tests, no network access or API key needed.
 
 **The chat endpoint** is driven over its real HTTP contract with a fake provider injected at the registry boundary — configuration, not module patching, so the seam stays a genuine boundary. Tests assert what a caller can observe rather than how the internals are arranged, which means the retriever can be rewritten without rewriting the tests. Covered: the six representative questions' retrieval, conflict flagging, empty input reaching no provider, off-corpus questions reaching the model with no passages and under the restricted prompt, silent pre-latch fallback, no fallback after flush and no mixing of two models' text, estimated usage on an aborted stream, truncation, rate-limit messaging, per-model cost, and follow-up resolution — that a rewrite reaches retrieval but never the question the model is asked, that a cut-off or unsearchable rewrite is rejected, that both attempts are billed when one is, and that no rewrite call is made on a first question or an empty one.
 

@@ -209,6 +209,39 @@ describe("passage count follows the evidence, not a fixed slice", () => {
     expect(result.passages.map((p) => p.chunk.id)).not.toContain("relay.md#support-sla");
   });
 
+  it("drops a passage that matched only one incidental term", () => {
+    // relay.md#pricing matches `api` and nothing else of a 403 question, and sat
+    // comfortably above the score floor: a ratio cannot tell a weak match on the
+    // right topic from a strong match on the wrong one. Every returned passage now
+    // has to carry evidence of its own.
+    const result = index.search("A client is getting a 403 on the Relay API. What should they check first?");
+
+    for (const p of result.passages) {
+      expect(p.matched).toContain("403");
+    }
+  });
+
+  it("does not apply the evidence bar above the evidence available", () => {
+    // "what is relay?" has one meaningful term once the stopwords and the product
+    // name are gone. Requiring two would reject every passage that answers it.
+    const result = index.search("what is relay?");
+
+    expect(result.empty).toBe(false);
+    expect(result.passages.length).toBeGreaterThan(1);
+    expect(result.passages.map((p) => p.chunk.id)).toContain("relay.md#overview");
+  });
+
+  it("keeps the company-wide passage that defines a term the answer needs", () => {
+    // The evidence bar must not cost breadth where breadth is the answer: P1 is
+    // defined in the support policy, not in Vault's SLA table.
+    const ids = index
+      .search("What's the SLA for Priority 1 tickets on Nimbus Vault?")
+      .passages.map((p) => p.chunk.id);
+
+    expect(ids).toContain("vault.md#support-sla");
+    expect(ids).toContain("support-policy.md#priority-definitions");
+  });
+
   it("still returns breadth for a question that spans the product line", () => {
     // The cutoff must not starve a "which products" question of products.
     const result = index.search("Which of our products support SSO via SAML 2.0?");

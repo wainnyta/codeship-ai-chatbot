@@ -270,9 +270,18 @@ export class KnowledgeBaseIndex {
      * refused a question the corpus answers on its first page. When a question is
      * only its subject, the subject is the topic.
      */
-    // Measured on meaningful terms, not raw ones: "what is relay?" leaves `what`
-    // and `is` behind, which look like a topic and match nothing.
-    const terms = meaningfulTerms(topical).length ? topical : allTerms;
+    /**
+     * Only content words are scored. BM25's IDF is supposed to make `the` and `is`
+     * negligible, but over a corpus this small it leaves them slightly positive,
+     * they saturate their term-frequency component in every chunk, and the sum
+     * lifts the whole ranking by roughly the same amount. The effect is not a wrong
+     * order; it is a flat one — and a flat ranking defeats the relevance floor
+     * below, which keeps a passage if it scores within a fraction of the best. Eight
+     * passages all matching `is` and `the` cleared that floor comfortably and were
+     * cited as sources for a question about nothing in the corpus.
+     */
+    const topicalTerms = meaningfulTerms(topical);
+    const terms = topicalTerms.length ? topicalTerms : meaningfulTerms(allTerms);
 
     const ranked = this.docs
       // A question about exactly one product cannot be answered from a different
@@ -300,7 +309,7 @@ export class KnowledgeBaseIndex {
     // two-term bar exists to reject questions that only brush the corpus by
     // accident ("nginx reverse proxy headers" catching `headers`); a question that
     // names Relay has already cleared that bar.
-    const required = products.length ? 1 : 2;
+    const required = products.length ? 1 : EVIDENCE_TERMS;
     const clearsFloor = ranked.some((r) => meaningfulTerms(r.matched).length >= required);
     if (!clearsFloor) {
       return { passages: [], conflicts: [], empty: true, product };
@@ -311,8 +320,27 @@ export class KnowledgeBaseIndex {
     // question listed the pricing table as a source. Scores fall off a cliff after
     // the genuinely relevant hits, so anything far below the best match is tail.
     const best = ranked[0].score;
-    const passages = ranked
-      .filter((r) => r.score >= best * RELEVANCE_FLOOR)
+    const aboveFloor = ranked.filter((r) => r.score >= best * RELEVANCE_FLOOR);
+
+    /**
+     * The same evidence test that decides whether to answer at all, applied to each
+     * passage rather than once across the whole result: a passage is a source only
+     * if, on its own, it carries enough matched terms to have been worth answering
+     * from. Relay's pricing table matched exactly one incidental term of a 403
+     * question — `api` — and the score floor kept it, because a ratio cannot tell a
+     * weak match on the right topic from a strong match on the wrong one.
+     *
+     * The bar cannot exceed the evidence the question actually produced, or a
+     * question whose whole content is one word ("what is relay?") would reject every
+     * passage that answers it. Unlike the refusal bar above, naming a product does
+     * not lower it: the 403 question names Relay, and Relay's pricing table is still
+     * not about a 403.
+     */
+    const available = new Set(aboveFloor.flatMap((r) => meaningfulTerms(r.matched)));
+    const bar = Math.min(EVIDENCE_TERMS, available.size);
+
+    const passages = aboveFloor
+      .filter((r) => meaningfulTerms(r.matched).length >= bar)
       .slice(0, limit);
 
     return {
@@ -358,6 +386,13 @@ export function comparable(fileA: string, fileB: string): boolean {
  * Measured against the corpus: genuinely relevant hits sit above ~24% of the top
  * score and the irrelevant tail sits at ~18%, so this sits in the gap between them.
  */
+/**
+ * Distinct meaningful terms that make a match evidence rather than coincidence.
+ * One term is routinely a coincidence — `headers` in "nginx reverse proxy headers",
+ * `api` in a question about a 403.
+ */
+export const EVIDENCE_TERMS = 2;
+
 export const RELEVANCE_FLOOR = 0.22;
 
 /** Most specific candidate pairs to report. Beyond a handful, a flag is noise. */
