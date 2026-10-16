@@ -24,24 +24,51 @@ interface Turn {
   streaming: boolean;
 }
 
-const STARTERS = [
+/**
+ * Opening questions. Each names the product it depends on, so a starter is hidden
+ * rather than offered and broken if that product leaves the corpus.
+ */
+const STARTERS: Array<{ q: string; why: string; product?: string }> = [
   {
     q: "Which of our products support SSO via SAML 2.0?",
-    why: "Spans all four products — and two documents disagree about Vault",
+    why: "Spans the whole product line — and two documents disagree about Vault",
+    product: "vault",
   },
   {
     q: "What are the key differences between Relay's Pro and Enterprise tiers?",
     why: "Tier comparison from the pricing table",
+    product: "relay",
   },
   {
     q: "A client is getting a 403 on the Relay API. What should they check first?",
     why: "Troubleshooting steps in order, for the right product",
+    product: "relay",
   },
   {
     q: "What's the SLA for Priority 1 tickets on Nimbus Vault?",
     why: "A single row of a table, per tier",
+    product: "vault",
   },
 ];
+
+/**
+ * What this assistant covers, said in the corpus's own terms.
+ *
+ * Naming the products is the most useful thing the empty state can do — it is how
+ * someone learns what they may ask — so the answer to "what if the product line
+ * changes" is to derive the sentence, not to delete it. Past a handful of products
+ * the list stops being readable and a count carries the same meaning.
+ */
+function coverage(products: string[]): string {
+  // Sorted, because the roster arrives in whatever order the corpus directory was
+  // read in and that is not guaranteed to be the same on two machines. A sentence
+  // on the front page should not depend on the filesystem.
+  const names = [...products].sort().map((p) => p[0].toUpperCase() + p.slice(1));
+  if (!names.length) return "Ask about the NimbusStack documentation.";
+  if (names.length === 1) return `Ask about ${names[0]}.`;
+  if (names.length > 5) return `Ask about any of NimbusStack's ${names.length} products.`;
+  return `Ask about ${names.slice(0, -1).join(", ")} or ${names.at(-1)}.`;
+}
 
 function newTurn(question: string): Turn {
   return {
@@ -59,7 +86,7 @@ function newTurn(question: string): Turn {
   };
 }
 
-export function Chat() {
+export function Chat({ products }: { products: string[] }) {
   const [models, setModels] = useState<PublicModel[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -307,7 +334,6 @@ export function Chat() {
       <header className="topbar">
         <div className="titles">
           <h1>NimbusStack Product Assistant</h1>
-          <p>Answers from NimbusStack&rsquo;s own documentation, with the passages they came from.</p>
         </div>
 
         <button
@@ -323,14 +349,14 @@ export function Chat() {
       <div className="transcript" ref={transcriptRef}>
         {!turns.length ? (
           <div className="empty">
-            <h1>Ask about Relay, Vault, Pulse or Ledger.</h1>
+            <h2>{coverage(products)}</h2>
             <p>
-              Every answer is built from NimbusStack&rsquo;s own documentation and shows the
-              passages it came from. If the documents don&rsquo;t cover something, it says so
-              rather than guessing.
+              An internal tool for Sales, Support and Training. Every answer is built from
+              NimbusStack&rsquo;s own documentation and shows the passages it came from. If
+              the documents don&rsquo;t cover something, it says so rather than guessing.
             </p>
             <div className="starters">
-              {STARTERS.map((s) => (
+              {STARTERS.filter((s) => !s.product || products.includes(s.product)).map((s) => (
                 <button
                   key={s.q}
                   type="button"

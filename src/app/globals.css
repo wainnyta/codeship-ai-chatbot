@@ -99,13 +99,6 @@ input {
   line-height: 1.2;
 }
 
-.titles p {
-  margin: 3px 0 0;
-  font-size: 12.5px;
-  color: var(--slate);
-  max-width: 62ch;
-}
-
 .ghost-button {
   background: none;
   border: 1px solid var(--rule);
@@ -623,12 +616,25 @@ input {
 
 /* ---------- empty state ---------- */
 
+/*
+ * Anchored to the composer, not floated in the middle of the page.
+ *
+ * Top-aligned, this block sat above a column of empty space with the input far
+ * below it, reading as a panel that happened to be there rather than as an
+ * invitation to type. Sitting it directly above the composer puts the suggested
+ * questions next to the box they fill in, and the empty space goes above the
+ * content where it costs nothing.
+ */
 .empty {
   max-width: var(--measure);
-  padding-top: 16px;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding-bottom: 4px;
 }
 
-.empty h1 {
+.empty h2 {
   font-family: var(--serif);
   font-size: 27px;
   font-weight: 400;
