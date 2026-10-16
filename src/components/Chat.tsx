@@ -43,13 +43,28 @@ const STARTERS: Array<{ q: string; product?: string }> = [
  * an avatar beside every answer, which by the fifth turn is wallpaper. Idle is a
  * real state here and needs a line of its own, so the bar never sits blank.
  */
+/**
+ * What Nibo says between questions.
+ *
+ * The "did you know" lines are about the tool rather than about the products.
+ * Facts about the corpus would have to be written here by hand and would quietly
+ * go stale the first time a document changed — the same trap the hard-coded
+ * product roster was. Every line below is true of the application itself, so each
+ * one teaches something usable and none of them can be outdated by an edit to the
+ * knowledge base.
+ */
 const IDLE_LINES = [
   "Waiting for a question.",
   "Ready when you are.",
   "Standing by, documents open.",
   "Nothing in flight.",
-  "Ask away — I'll show my sources.",
-  "Four products. No guessing.",
+  "Did you know? You can switch model mid-conversation and keep the thread.",
+  "Did you know? Every answer shows the passages it was built from.",
+  "Did you know? I'll flag it when two documents disagree with each other.",
+  "Did you know? Follow-ups work — just ask \"and for Relay?\" next.",
+  "Did you know? The token count and cost of every answer are shown below.",
+  "Did you know? You can export the whole session as CSV or JSON.",
+  "Did you know? If the documents don't cover it, I say so instead of guessing.",
 ];
 
 function activity(
@@ -489,8 +504,8 @@ export function Chat({ products }: { products: string[] }) {
         })}
       </div>
 
-      <div className="nibo-bar">
-        <Nibo state={live.state} size={30} />
+      <div className="nibo-perch">
+        <Nibo state={live.state} size={34} />
         <span className="nibo-says">{live.line}</span>
       </div>
 

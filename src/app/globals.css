@@ -721,6 +721,7 @@ input {
   gap: 18px;
   flex-wrap: wrap;
   padding: 9px 24px;
+  border-top: 1px solid var(--rule);
   background: var(--paper);
   font-family: var(--mono);
   font-size: 11.5px;
@@ -1126,24 +1127,36 @@ input {
 }
 
 /*
- * Nibo's bar. The character lives here and nowhere else in the conversation: an
- * avatar beside every answer was the same drawing five times down a page, and the
- * one thing a status indicator must not be is scenery.
+ * Nibo perches on the session strip rather than sitting inside it.
+ *
+ * Given its own bar, the character became another row of chrome — a third
+ * horizontal band stacked above the numbers and the composer. Hanging it over the
+ * edge instead keeps it a character: it belongs to the page, overlaps the strip by
+ * a few pixels the way something resting on a ledge does, and the strip underneath
+ * stays a clean line of figures.
  *
  * Between the transcript and the composer on purpose — the eye passes through here
  * on its way back to the input, which is exactly when someone wants to know
  * whether anything is still happening.
  */
-.nibo-bar {
+.nibo-perch {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 24px 2px;
-  border-top: 1px solid var(--rule);
-  background: var(--paper);
+  align-items: flex-end;
+  gap: 9px;
+  padding: 0 22px;
+  /* Dip onto the strip below, so it reads as resting on it rather than above it. */
+  margin-bottom: -7px;
+  position: relative;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.nibo-perch .nibo {
+  filter: drop-shadow(0 1px 1px rgba(21, 29, 42, 0.07));
 }
 
 .nibo-says {
+  margin-bottom: 9px;
   font-family: var(--sans);
   font-size: 12.5px;
   color: var(--slate);
