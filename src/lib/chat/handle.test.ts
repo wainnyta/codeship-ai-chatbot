@@ -189,7 +189,7 @@ describe("E2 — off-corpus questions get no passages to answer from", () => {
     void post(ask("are you sure you're doing good job"), GEMINI, fake);
 
     expect(SCOPE_PROMPT).toMatch(/NEVER claim to be accurate, helpful, reliable or correct/);
-    expect(SCOPE_PROMPT).toMatch(/no record of how your answers have landed/);
+    expect(SCOPE_PROMPT).toMatch(/Decline in one short clause/);
   });
 
   it("still reports which model answered, and what it cost", async () => {
