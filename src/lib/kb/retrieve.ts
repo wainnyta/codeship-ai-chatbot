@@ -248,7 +248,18 @@ export class KnowledgeBaseIndex {
      * "relay" and nothing else. Scoring on topic alone and letting the boost carry
      * the product keeps the two signals separate.
      */
-    const terms = allTerms.filter((t) => !products.includes(t));
+    const topical = allTerms.filter((t) => !products.includes(t));
+
+    /**
+     * ...unless the product name is the entire question. "What is Relay?" has
+     * nothing left once `what` and `is` go as stopwords and `relay` goes as the
+     * product, so scoring on topic alone found zero terms, matched nothing, and
+     * refused a question the corpus answers on its first page. When a question is
+     * only its subject, the subject is the topic.
+     */
+    // Measured on meaningful terms, not raw ones: "what is relay?" leaves `what`
+    // and `is` behind, which look like a topic and match nothing.
+    const terms = meaningfulTerms(topical).length ? topical : allTerms;
 
     const ranked = this.docs
       // A question about exactly one product cannot be answered from a different

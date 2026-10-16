@@ -294,3 +294,44 @@ describe("questions about the corpus itself", () => {
     expect(index.search("How do I configure nginx reverse proxy headers?").empty).toBe(true);
   });
 });
+
+describe("a question that is only its subject", () => {
+  it("answers 'what is relay?' instead of refusing", () => {
+    // Two guards combined to refuse this: stopwords removed "what" and "is", and
+    // the product-double-count fix removed "relay", leaving nothing to search on.
+    const result = index.search("what is relay?");
+
+    expect(result.empty).toBe(false);
+    expect(result.passages.map((p) => p.chunk.file)).toContain("relay.md");
+  });
+
+  it("answers a bare product name for every product", () => {
+    for (const [query, file] of [
+      ["what is vault", "vault.md"],
+      ["what is pulse?", "pulse.md"],
+      ["what is ledger?", "ledger.md"],
+      ["Tell me about Nimbus Relay", "relay.md"],
+    ] as const) {
+      const result = index.search(query);
+      expect(result.empty, `"${query}" should not be refused`).toBe(false);
+      expect(result.passages.map((p) => p.chunk.file)).toContain(file);
+    }
+  });
+
+  it("reaches the product's own overview, not only its incidental mentions", () => {
+    const ids = index.search("what is relay?").passages.map((p) => p.chunk.id);
+    expect(ids).toContain("relay.md#overview");
+  });
+
+  it("still drops the product term when the question has a real topic", () => {
+    // The double-count fix must survive: a 403 question stays narrow.
+    const result = index.search("A client is getting a 403 on the Relay API. What should they check first?");
+    expect(result.passages.length).toBeLessThan(5);
+    expect(result.passages.map((p) => p.chunk.id)).not.toContain("relay.md#pricing");
+  });
+
+  it("still refuses questions the corpus cannot answer", () => {
+    expect(index.search("What is the capital of France?").empty).toBe(true);
+    expect(index.search("How do I configure nginx reverse proxy headers?").empty).toBe(true);
+  });
+});

@@ -36,7 +36,7 @@ Open http://localhost:3000.
 npm test
 ```
 
-106 tests, no network and no API key required.
+111 tests, no network and no API key required.
 
 ---
 
@@ -117,7 +117,7 @@ The context meter warns at 75% (amber) and 90% (red), and recomputes the moment 
 
 ## Testing
 
-Two seams, 106 tests, no network access or API key needed.
+Two seams, 111 tests, no network access or API key needed.
 
 **The chat endpoint** is driven over its real HTTP contract with a fake provider injected at the registry boundary — configuration, not module patching, so the seam stays a genuine boundary. Tests assert what a caller can observe rather than how the internals are arranged, which means the retriever can be rewritten without rewriting the tests. Covered: the six representative questions' retrieval, conflict flagging, empty input reaching no provider, off-corpus questions reaching no provider, silent pre-latch fallback, no fallback after flush and no mixing of two models' text, estimated usage on an aborted stream, truncation, rate-limit messaging, and per-model cost.
 
@@ -160,6 +160,6 @@ Left deliberately, and worth arguing about:
 
 - **No conversation persistence.** Out of scope per the brief. Refreshing loses the session.
 - **Conflict detection is a candidate finder, and the model is the judge.** Retrieval finds passages covering the same ground; it cannot tell agreement from disagreement, because that is semantic. Those candidates go into the prompt — that is what makes the model look — but the amber banner is raised only when the answer itself declares a contradiction. If a model omits the declaration the UI under-warns while the prose still spells the disagreement out, which is the safe direction.
-- **The relevance floor is a heuristic** — two distinct meaningful terms on one passage. It is tuned against the six representative questions and could be wrong at the margins in both directions.
+- **The relevance floor is a heuristic** — two distinct meaningful terms on one passage, relaxed to one when the question names a product. It is tuned against the representative questions and could still be wrong at the margins. False refusals are the failure mode to watch: a confidently wrong answer is worse, but refusing a question the documents do answer erodes trust just as fast.
 - **Topic carry inherits the most recently mentioned product.** Clean for a follow-up about one product; a conversation ranging across two could inherit the wrong one.
 - **No "continue" for truncated replies**, only resend.

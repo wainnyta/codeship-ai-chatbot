@@ -1,11 +1,11 @@
 {
   "$comment": "Single source of truth for model metadata (R3). Nothing about a model is hard-coded in src/. Prices are USD per million tokens, taken from each provider's published pricing; re-check them when they change, because every cost figure in the UI is derived from here.",
 
-  "$defaultComment": "OpenAI is the default because it is the provider with working billing on this account today. Gemini would otherwise lead on cost (free tier), but its key currently returns 402 and Anthropic's is out of credit, and defaulting to a dead provider makes every first message pay a wasted round trip before falling back. Change this line once the other accounts are funded.",
-  "defaultModelId": "gpt-6.1-sol",
+  "$defaultComment": "Gemini leads on cost by a wide margin ($0.75/$3.75 per Mtok against $2/$10 and $4/$20) and is the only one with a free tier, so it is the default and the head of the fallback chain. All three providers are funded; the chain is ordered cheapest first, so a fallback never silently costs more than it has to.",
+  "defaultModelId": "gemini-3.8-flash",
 
   "$fallbackOrderComment": "Tried in order when the selected model cannot produce a reply. The selected model is always tried first and then skipped here.",
-  "fallbackOrder": ["gpt-6.1-sol", "gemini-3.8-flash", "claude-opus-5-5"],
+  "fallbackOrder": ["gemini-3.8-flash", "gpt-6.1-sol", "claude-opus-5-5"],
 
   "models": [
     {
