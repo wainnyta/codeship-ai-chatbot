@@ -181,6 +181,17 @@ describe("E2 — off-corpus questions get no passages to answer from", () => {
     expect(system).toMatch(/not certain which case applies, use case 2/i);
   });
 
+  it("forbids the assistant from vouching for itself", () => {
+    // "Are you doing a good job?" is about the assistant, so it is not refused —
+    // but the only honest answer is that it cannot know. A tool whose whole value
+    // is that it does not make things up must not make up that it is accurate.
+    const fake = makeFake({});
+    void post(ask("are you sure you're doing good job"), GEMINI, fake);
+
+    expect(SCOPE_PROMPT).toMatch(/NEVER claim to be accurate, helpful, reliable or correct/);
+    expect(SCOPE_PROMPT).toMatch(/no record of how your answers have landed/);
+  });
+
   it("still reports which model answered, and what it cost", async () => {
     const fake = makeFake({ [GEMINI]: { usage: { inputTokens: 300, outputTokens: 40 } } });
     const { events } = await post(ask("What is the capital of France?"), GEMINI, fake);

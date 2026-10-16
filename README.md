@@ -36,7 +36,7 @@ Open http://localhost:3000.
 npm test
 ```
 
-146 tests, no network and no API key required.
+147 tests, no network and no API key required.
 
 ---
 
@@ -69,7 +69,9 @@ The corpus in `nimbusstack-knowledge-base/` is used exactly as supplied and neve
 
 **When retrieval finds nothing, the model is sent no passages at all.** "Nothing retrieved" covers two different situations: a product question the documentation does not cover, and a question about the assistant itself. `hi, who are you` retrieves nothing, and refusing it made the assistant look broken on the first thing anyone types — yet its answer comes from the assistant's own prompt, not from general knowledge, so answering it is not an ungrounded claim.
 
-Telling the two apart is semantic, so the model does it under a restricted prompt offering exactly two replies: describe yourself, naming no feature, price, tier, version or date — or reply with the refusal text verbatim. The grounding guarantee is unchanged and structural, because no passages are supplied: there is nothing to cite and no document to misquote, whatever it decides. Verified live across all three providers on greetings, "what can you do", a non-English greeting, world-knowledge questions, a write-me-a-poem request, arithmetic, and a prompt injection.
+Telling the two apart is semantic, so the model does it under a restricted prompt offering exactly two replies: describe yourself, naming no feature, price, tier, version or date — or reply with the refusal text verbatim. The grounding guarantee is unchanged and structural, because no passages are supplied: there is nothing to cite and no document to misquote, whatever it decides. Being asked to judge itself falls in the first case, not the second: "are you doing a good job?" is a question about the assistant, and refusing it with a line about the knowledge base is a non-sequitur. It answers that it cannot know — it has no record of how its answers have landed — and points at the thing that is actually useful, which is that every answer shows its sources so the reader can check rather than take its word. It is forbidden from claiming to be accurate, reliable or helpful: a tool whose entire value is that it does not invent things must not invent that.
+
+Verified live across all three providers on greetings, "what can you do", a non-English greeting, self-assessment, "which AI model is best?", world-knowledge questions, a write-me-a-poem request, arithmetic, and a prompt injection.
 
 This costs one short call on a path that used to be free. The exchange is an assistant that answers the first thing anyone types.
 
@@ -145,7 +147,7 @@ The context meter warns at 75% (amber) and 90% (red), and recomputes the moment 
 
 ## Testing
 
-Two seams, 146 tests, no network access or API key needed.
+Two seams, 147 tests, no network access or API key needed.
 
 **The chat endpoint** is driven over its real HTTP contract with a fake provider injected at the registry boundary — configuration, not module patching, so the seam stays a genuine boundary. Tests assert what a caller can observe rather than how the internals are arranged, which means the retriever can be rewritten without rewriting the tests. Covered: the six representative questions' retrieval, conflict flagging, empty input reaching no provider, off-corpus questions reaching the model with no passages and under the restricted prompt, silent pre-latch fallback, no fallback after flush and no mixing of two models' text, estimated usage on an aborted stream, truncation, rate-limit messaging, per-model cost, and follow-up resolution — that a rewrite reaches retrieval but never the question the model is asked, that a cut-off or unsearchable rewrite is rejected, that both attempts are billed when one is, and that no rewrite call is made on a first question or an empty one.
 
