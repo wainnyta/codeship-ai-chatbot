@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Answer } from "./Answer";
 import { ModelPicker } from "./ModelPicker";
+import { Nibo, type NiboState } from "./Nibo";
 import { Sources } from "./Sources";
 import type { PublicModel } from "@/lib/config";
 import type { AnsweringModel, PassageView, RewriteView, StreamEvent } from "@/lib/providers/types";
@@ -28,46 +29,17 @@ interface Turn {
  * Opening questions. Each names the product it depends on, so a starter is hidden
  * rather than offered and broken if that product leaves the corpus.
  */
-const STARTERS: Array<{ q: string; why: string; product?: string }> = [
-  {
-    q: "Which of our products support SSO via SAML 2.0?",
-    why: "Spans the whole product line — and two documents disagree about Vault",
-    product: "vault",
-  },
-  {
-    q: "What are the key differences between Relay's Pro and Enterprise tiers?",
-    why: "Tier comparison from the pricing table",
-    product: "relay",
-  },
-  {
-    q: "A client is getting a 403 on the Relay API. What should they check first?",
-    why: "Troubleshooting steps in order, for the right product",
-    product: "relay",
-  },
-  {
-    q: "What's the SLA for Priority 1 tickets on Nimbus Vault?",
-    why: "A single row of a table, per tier",
-    product: "vault",
-  },
+const STARTERS: Array<{ q: string; product?: string }> = [
+  { q: "Which of our products support SSO via SAML 2.0?", product: "vault" },
+  { q: "What are the key differences between Relay's Pro and Enterprise tiers?", product: "relay" },
+  { q: "A client is getting a 403 on the Relay API. What should they check first?", product: "relay" },
+  { q: "What's the SLA for Priority 1 tickets on Nimbus Vault?", product: "vault" },
 ];
 
-/**
- * What this assistant covers, said in the corpus's own terms.
- *
- * Naming the products is the most useful thing the empty state can do — it is how
- * someone learns what they may ask — so the answer to "what if the product line
- * changes" is to derive the sentence, not to delete it. Past a handful of products
- * the list stops being readable and a count carries the same meaning.
- */
-function coverage(products: string[]): string {
-  // Sorted, because the roster arrives in whatever order the corpus directory was
-  // read in and that is not guaranteed to be the same on two machines. A sentence
-  // on the front page should not depend on the filesystem.
-  const names = [...products].sort().map((p) => p[0].toUpperCase() + p.slice(1));
-  if (!names.length) return "Ask about the NimbusStack documentation.";
-  if (names.length === 1) return `Ask about ${names[0]}.`;
-  if (names.length > 5) return `Ask about any of NimbusStack's ${names.length} products.`;
-  return `Ask about ${names.slice(0, -1).join(", ")} or ${names.at(-1)}.`;
+/** Which stage of the request Nibo should be showing. */
+function workingState(turn: Turn, index: number): NiboState {
+  if (turn.passages.length) return "searching";
+  return index > 0 ? "thinking" : "searching";
 }
 
 function newTurn(question: string): Turn {
@@ -349,12 +321,17 @@ export function Chat({ products }: { products: string[] }) {
       <div className="transcript" ref={transcriptRef}>
         {!turns.length ? (
           <div className="empty">
-            <h2>{coverage(products)}</h2>
-            <p>
-              An internal tool for Sales, Support and Training. Every answer is built from
-              NimbusStack&rsquo;s own documentation and shows the passages it came from. If
-              the documents don&rsquo;t cover something, it says so rather than guessing.
-            </p>
+            <div className="greeting">
+              <Nibo size={64} />
+              <h2>
+                Hi! I&rsquo;m Nibo — the NimbusStack product assistant. Ask me anything and
+                I&rsquo;ll look it up in the knowledge base and give you the best answer I can
+                find. I&rsquo;m honest and straightforward, and I&rsquo;ll never make up an
+                answer.
+              </h2>
+            </div>
+
+            <p className="sample-label">Sample questions you can ask me</p>
             <div className="starters">
               {STARTERS.filter((s) => !s.product || products.includes(s.product)).map((s) => (
                 <button
@@ -365,7 +342,6 @@ export function Chat({ products }: { products: string[] }) {
                   disabled={busy}
                 >
                   {s.q}
-                  <small>{s.why}</small>
                 </button>
               ))}
             </div>
@@ -411,11 +387,12 @@ export function Chat({ products }: { products: string[] }) {
                 */}
               {turn.streaming && !answerText ? (
                 <p className="working">
+                  <Nibo state={workingState(turn, index)} size={40} />
                   {turn.passages.length
                     ? `Reading ${turn.passages.length} passage${turn.passages.length === 1 ? "" : "s"}…`
                     : index > 0
-                      ? "Working out what the question refers to…"
-                      : "Searching the documentation…"}
+                      ? "Working out what you mean…"
+                      : "Looking through the knowledge base…"}
                 </p>
               ) : null}
 

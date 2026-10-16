@@ -93,6 +93,14 @@ The resolved query is shown above the sources, and the call is billed separately
 
 The honest cost: a follow-up waits ~2.5s longer before its first token, and the UI says what it is doing during that wait.
 
+### Nibo
+
+The assistant has a face: a small cumulus cloud, because the products are Nimbus and the company is NimbusStack. It introduces itself by name on the opening screen and in its own replies, so the page and the model agree about who is talking.
+
+Its states are a status indicator rather than decoration. Each corresponds to a stage the request is genuinely in — resolving a follow-up into a standalone question, or reading the passages that came back — so the animation cannot drift out of sync with what the server is doing. There is deliberately no "writing the answer" state: the answer is streaming word by word at that point, and a second indicator saying so would be noise. Motion is suppressed under `prefers-reduced-motion`, where the gesture still renders statically so it stays legible without it.
+
+The greeting on the opening screen makes a promise about never inventing an answer. That is product copy the team writes, and it is separate from the rule the model runs under, which forbids it from vouching for its own accuracy at runtime — the architecture is what keeps the promise, not the model's opinion of itself.
+
 ### Adding a document is the only step to adding a product
 
 The product roster is derived from the corpus, not listed in source. A document names its product in its own H1 — `# Nimbus Vault`, `# Nimbus Relay release notes` — while a company-wide document is titled `# NimbusStack support policy`, one word, so the required space excludes it without a list of exceptions. Dropping `forge.md` into the folder adds Forge to the roster, to product scoping, to the boost that keeps one product's documents from answering for another, and to the vocabulary behind "what products do we have", with no code change. Verified by doing it.
