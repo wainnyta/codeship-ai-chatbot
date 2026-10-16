@@ -13,12 +13,35 @@ export interface Chunk {
    * document says X, the July one says Y" rather than silently averaged.
    */
   docDate: string | null;
+  /**
+   * The product this document belongs to, lowercased, or null for a company-wide
+   * document. Derived from the document's own title rather than from a list in
+   * source, so adding a fifth product is a matter of dropping its markdown into
+   * the corpus — there is nothing to remember to update.
+   */
+  product: string | null;
   /** The `## heading` this chunk sits under, or "Overview" for the preamble. */
   heading: string;
   text: string;
 }
 
 const DATE_RE = /updated\s+(\d{4}-\d{2}-\d{2})/i;
+
+/**
+ * A product document names its product in its own H1: "Nimbus Vault", "Nimbus
+ * Relay release notes". A company-wide document is titled "NimbusStack support
+ * policy" — one word, no space — so the required whitespace excludes it without
+ * needing a list of exceptions.
+ *
+ * Filenames would have been the obvious source, but `security-overview.md` is
+ * indistinguishable from a product file by its name alone, and the only way to
+ * tell them apart would be the hard-coded roster this replaces.
+ */
+const PRODUCT_TITLE = /^Nimbus\s+([A-Za-z][A-Za-z0-9-]*)/;
+
+export function productInTitle(docTitle: string): string | null {
+  return PRODUCT_TITLE.exec(docTitle)?.[1].toLowerCase() ?? null;
+}
 
 function slug(s: string): string {
   return s
@@ -40,20 +63,34 @@ export function chunkDocument(file: string, source: string): Chunk[] {
 
   const docTitle = lines.find((l) => l.startsWith("# "))?.slice(2).trim() ?? file;
   const docDate = source.match(DATE_RE)?.[1] ?? null;
+  const product = productInTitle(docTitle);
 
   const chunks: Chunk[] = [];
   let heading = "Overview";
   let buffer: string[] = [];
+  // Citation ids must be unique: they are how the model refers to a passage, how
+  // the UI scrolls to it, and how a cited source is matched back to what was
+  // retrieved. A document carrying both a preamble and its own "## Overview"
+  // heading produced two chunks called `file.md#overview`, and every one of those
+  // lookups silently resolved to whichever came first.
+  const used = new Set<string>();
 
   const flush = () => {
     const text = buffer.join("\n").trim();
     buffer = [];
     if (!text) return;
+
+    const base = `${file}#${slug(heading)}`;
+    let id = base;
+    for (let n = 2; used.has(id); n++) id = `${base}-${n}`;
+    used.add(id);
+
     chunks.push({
-      id: `${file}#${slug(heading)}`,
+      id,
       file,
       docTitle,
       docDate,
+      product,
       heading,
       text,
     });

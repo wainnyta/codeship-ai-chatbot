@@ -1,4 +1,5 @@
-import type { Chunk } from "./chunk";
+import { formatChunk, type Chunk } from "./chunk";
+import { estimateTokens } from "../usage";
 
 export interface ScoredChunk {
   chunk: Chunk;
@@ -21,7 +22,14 @@ export interface RetrievalResult {
   product: string | null;
 }
 
-export const PRODUCTS = ["relay", "vault", "pulse", "ledger"] as const;
+/**
+ * The products the corpus documents, in the order they were loaded.
+ *
+ * Derived from the documents themselves rather than listed here. A hard-coded
+ * roster meant a fifth product was a source change in four places — in an
+ * application whose whole premise is that what varies lives in configuration.
+ */
+export type Roster = readonly string[];
 
 const STOPWORDS = new Set([
   "a","an","and","any","are","as","at","be","but","by","can","do","does","for","from",
@@ -38,6 +46,9 @@ const STOPWORDS = new Set([
  * Colloquial phrasing mapped onto document vocabulary. This is what lets "does it
  * do single sign-on?" reach material filed under SAML, OIDC and federated sign-in.
  */
+/** Replaced with the loaded corpus's product names. See PHRASE_SYNONYMS. */
+const ROSTER = "\0roster";
+
 const PHRASE_SYNONYMS: Array<[RegExp, string[]]> = [
   [/single sign[- ]?on|\bsso\b|sign[- ]?in|log ?in|authenticat/i,
    ["sso", "saml", "oidc", "openid", "connect", "federated", "sign-in", "identity"]],
@@ -54,8 +65,10 @@ const PHRASE_SYNONYMS: Array<[RegExp, string[]]> = [
   // corpus can answer — but it shares almost no vocabulary with any document, so
   // the relevance floor used to refuse it while the refusal text itself listed the
   // four products. The roster needs vocabulary like any other topic.
+  // The expansion is the roster itself, which is not known until the corpus is
+  // loaded, so this entry carries the marker and expandQuery substitutes.
   [/\bproducts?\b|product line|portfolio|what do (we|you) (sell|offer)|catalogue?|line[- ]?up/i,
-   ["relay", "vault", "pulse", "ledger", "nimbus", "product"]],
+   [ROSTER, "nimbus", "product"]],
 ];
 
 const TERM_SYNONYMS: Record<string, string[]> = {
@@ -75,7 +88,7 @@ export function tokenize(text: string): string[] {
   return text.toLowerCase().match(/[a-z0-9]+(?:[.\-][a-z0-9]+)*/g) ?? [];
 }
 
-export function expandQuery(raw: string): string[] {
+export function expandQuery(raw: string, roster: Roster = []): string[] {
   const terms = new Set<string>();
 
   for (const t of tokenize(raw)) {
@@ -86,16 +99,20 @@ export function expandQuery(raw: string): string[] {
   }
 
   for (const [pattern, extras] of PHRASE_SYNONYMS) {
-    if (pattern.test(raw)) for (const e of extras) terms.add(e);
+    if (!pattern.test(raw)) continue;
+    for (const e of extras) {
+      if (e === ROSTER) for (const product of roster) terms.add(product);
+      else terms.add(e);
+    }
   }
 
   return [...terms];
 }
 
-export function findProduct(text: string): string | null {
+export function findProduct(text: string, roster: Roster): string | null {
   const lower = text.toLowerCase();
   let best: { product: string; at: number } | null = null;
-  for (const p of PRODUCTS) {
+  for (const p of roster) {
     const at = lower.lastIndexOf(p);
     if (at !== -1 && (!best || at > best.at)) best = { product: p, at };
   }
@@ -106,9 +123,9 @@ export function findProduct(text: string): string | null {
  * Every product named in the text, not just the last one. A question naming two
  * products is a comparison, and must not be narrowed to either of them.
  */
-export function findProducts(text: string): string[] {
+export function findProducts(text: string, roster: Roster): string[] {
   const lower = text.toLowerCase();
-  return PRODUCTS.filter((p) => lower.includes(p));
+  return roster.filter((p) => lower.includes(p));
 }
 
 /**
@@ -116,11 +133,11 @@ export function findProducts(text: string): string[] {
  * the single most recent one from earlier turns, so "what about its SLA?" stays on
  * topic.
  */
-export function resolveProducts(query: string, history: string[]): string[] {
-  const named = findProducts(query);
+export function resolveProducts(query: string, history: string[], roster: Roster): string[] {
+  const named = findProducts(query, roster);
   if (named.length) return named;
 
-  const carried = resolveProduct(query, history);
+  const carried = resolveProduct(query, history, roster);
   return carried ? [carried] : [];
 }
 
@@ -129,11 +146,11 @@ export function resolveProducts(query: string, history: string[]): string[] {
  * question itself names none — so "what about its SLA?" after a Relay question
  * still retrieves Relay. Deterministic, and costs no extra model call.
  */
-export function resolveProduct(query: string, history: string[]): string | null {
-  const direct = findProduct(query);
+export function resolveProduct(query: string, history: string[], roster: Roster): string | null {
+  const direct = findProduct(query, roster);
   if (direct) return direct;
   for (let i = history.length - 1; i >= 0; i--) {
-    const carried = findProduct(history[i]);
+    const carried = findProduct(history[i], roster);
     if (carried) return carried;
   }
   return null;
@@ -171,14 +188,13 @@ export function hasMeaningfulTerm(text: string): boolean {
  */
 function productBoost(chunk: Chunk, products: string[]): number {
   if (!products.length) return 1;
-  return products.some((p) => chunk.file.startsWith(p)) ? 2.5 : 1;
+  return chunk.product !== null && products.includes(chunk.product) ? 2.5 : 1;
 }
 
 /** Whether a chunk can be a source for a question scoped to these products. */
 function inScope(chunk: Chunk, products: string[]): boolean {
   if (products.length !== 1) return true;
-  const owner = productOf(chunk.file);
-  return owner === null || owner === products[0];
+  return chunk.product === null || chunk.product === products[0];
 }
 
 interface IndexedChunk {
@@ -188,11 +204,15 @@ interface IndexedChunk {
 }
 
 export class KnowledgeBaseIndex {
+  /** Every product the loaded corpus documents. Drop in a file, get a product. */
+  readonly products: Roster;
   private readonly docs: IndexedChunk[];
   private readonly df = new Map<string, number>();
   private readonly avgLength: number;
 
   constructor(chunks: Chunk[]) {
+    this.products = [...new Set(chunks.map((c) => c.product).filter((p) => p !== null))];
+
     this.docs = chunks.map((chunk) => {
       // Heading and document title are weighted by repetition: a question naming
       // "Vault" or "pricing" should prefer the section actually called that.
@@ -247,11 +267,14 @@ export class KnowledgeBaseIndex {
     query: string,
     options: { history?: string[]; limit?: number } = {},
   ): RetrievalResult {
-    const { history = [], limit = 8 } = options;
+    const { history = [], limit = MAX_PASSAGES } = options;
 
-    const products = resolveProducts(query, history);
+    const products = resolveProducts(query, history, this.products);
     const product = products.length === 1 ? products[0] : null;
-    const allTerms = expandQuery(products.length ? `${query} ${products.join(" ")}` : query);
+    const allTerms = expandQuery(
+      products.length ? `${query} ${products.join(" ")}` : query,
+      this.products,
+    );
 
     /**
      * Once a product is resolved it is handled by the boost below, so counting it
@@ -339,9 +362,21 @@ export class KnowledgeBaseIndex {
     const available = new Set(aboveFloor.flatMap((r) => meaningfulTerms(r.matched)));
     const bar = Math.min(EVIDENCE_TERMS, available.size);
 
-    const passages = aboveFloor
-      .filter((r) => meaningfulTerms(r.matched).length >= bar)
-      .slice(0, limit);
+    const earned = aboveFloor.filter((r) => meaningfulTerms(r.matched).length >= bar);
+
+    // Spend the budget in rank order. The top passage is always included, however
+    // long it is: a question whose answer lives in one large table must still be
+    // answerable from it.
+    const passages: ScoredChunk[] = [];
+    let spent = 0;
+    for (const candidate of earned) {
+      const cost = estimateTokens(formatChunk(candidate.chunk));
+      if (passages.length && (spent + cost > PASSAGE_TOKEN_BUDGET || passages.length >= limit)) {
+        break;
+      }
+      passages.push(candidate);
+      spent += cost;
+    }
 
     return {
       passages,
@@ -359,11 +394,6 @@ export class KnowledgeBaseIndex {
   }
 }
 
-/** The product a document belongs to, or null for a company-wide document. */
-export function productOf(file: string): string | null {
-  return PRODUCTS.find((p) => file.startsWith(p)) ?? null;
-}
-
 /**
  * Whether two documents could contradict each other at all.
  *
@@ -374,10 +404,8 @@ export function productOf(file: string): string | null {
  * the same product, or when one of them is a company-wide document making a claim
  * about that product — which is exactly where the corpus's real drift lives.
  */
-export function comparable(fileA: string, fileB: string): boolean {
-  const a = productOf(fileA);
-  const b = productOf(fileB);
-  if (a && b) return a === b;
+export function comparable(a: Chunk, b: Chunk): boolean {
+  if (a.product && b.product) return a.product === b.product;
   return true; // at least one is company-wide
 }
 
@@ -392,6 +420,32 @@ export function comparable(fileA: string, fileB: string): boolean {
  * `api` in a question about a 403.
  */
 export const EVIDENCE_TERMS = 2;
+
+/**
+ * How much of the prompt the passages may occupy.
+ *
+ * A budget rather than a count, because a count means nothing across documents of
+ * different sizes: eight chunks is 134 tokens for a troubleshooting question and
+ * would be several thousand for a corpus written in longer sections. What actually
+ * needs bounding is the prompt, and that is measured in tokens.
+ *
+ * It is not a context-window limit. The whole corpus is ~2,900 tokens against a
+ * million-token window, so everything would fit and cost about $0.002 a question.
+ * It bounds how many near-misses sit between the model and the passage that
+ * answers, and how long a source list the reader has to scan mid-call.
+ *
+ * Chosen by measuring the six representative questions: at this budget the SAML
+ * question keeps all four products and the conflicting document, and the P1 SLA
+ * question keeps the company-wide passage defining P1. Tighter loses both.
+ */
+export const PASSAGE_TOKEN_BUDGET = 900;
+
+/**
+ * A backstop on the source list, not on the prompt. Short enough chunks could
+ * satisfy the budget with dozens of passages, and a citation list that long is
+ * not provenance the reader can check.
+ */
+export const MAX_PASSAGES = 20;
 
 export const RELEVANCE_FLOOR = 0.22;
 
@@ -428,7 +482,7 @@ export function detectConflicts(
       const a = passages[i];
       const b = passages[j];
       if (a.chunk.file === b.chunk.file) continue;
-      if (!comparable(a.chunk.file, b.chunk.file)) continue;
+      if (!comparable(a.chunk, b.chunk)) continue;
 
       const shared = meaningfulTerms(a.matched).filter((t) => b.matched.includes(t));
       if (shared.length < 2) continue;

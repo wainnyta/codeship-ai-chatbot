@@ -1,16 +1,31 @@
 import { describe, expect, it } from "vitest";
-import { getIndex } from "./index";
+import { KNOWLEDGE_BASE_DIR, getIndex, loadChunks } from "./index";
 import {
+  KnowledgeBaseIndex,
   MAX_CONFLICTS,
+  MAX_PASSAGES,
+  PASSAGE_TOKEN_BUDGET,
   comparable,
   findProduct,
   findProducts,
-  productOf,
   resolveProduct,
   resolveProducts,
 } from "./retrieve";
+import { estimateTokens } from "../usage";
+import { formatChunk } from "./chunk";
 
 const index = getIndex();
+
+/** The roster the corpus produced, derived rather than listed. */
+const roster = index.products;
+
+/** Any chunk of a given file, for the chunk-level product assertions. */
+const corpus = loadChunks(KNOWLEDGE_BASE_DIR);
+function chunkFor(file: string) {
+  const found = corpus.find((c) => c.file === file);
+  if (!found) throw new Error(`no chunk from ${file}`);
+  return found;
+}
 
 /** Source files behind a query's passages. */
 function files(query: string, history: string[] = []): string[] {
@@ -148,26 +163,39 @@ describe("E4 — documented disagreements are flagged structurally", () => {
   });
 
   it("treats same-product and company-wide documents as comparable, cross-product as not", () => {
-    expect(comparable("vault.md", "vault-release-notes.md")).toBe(true);
-    expect(comparable("vault.md", "security-overview.md")).toBe(true);
-    expect(comparable("vault.md", "pulse.md")).toBe(false);
-    expect(productOf("relay-release-notes.md")).toBe("relay");
-    expect(productOf("support-policy.md")).toBeNull();
+    expect(comparable(chunkFor("vault.md"), chunkFor("vault-release-notes.md"))).toBe(true);
+    expect(comparable(chunkFor("vault.md"), chunkFor("security-overview.md"))).toBe(true);
+    expect(comparable(chunkFor("vault.md"), chunkFor("pulse.md"))).toBe(false);
+  });
+});
+
+describe("the product roster comes from the corpus, not from source", () => {
+  it("derives every product from the documents themselves", () => {
+    expect([...index.products].sort()).toEqual(["ledger", "pulse", "relay", "vault"]);
+  });
+
+  it("does not mistake a company-wide document for a product", () => {
+    // "NimbusStack support policy" has no space after Nimbus; "Nimbus Vault" does.
+    expect(chunkFor("support-policy.md").product).toBeNull();
+    expect(chunkFor("security-overview.md").product).toBeNull();
+    expect(chunkFor("relay-release-notes.md").product).toBe("relay");
   });
 });
 
 describe("E1 — follow-ups inherit the product from earlier turns", () => {
   it("finds no product in a bare follow-up", () => {
-    expect(findProduct("what about its SLA?")).toBeNull();
+    expect(findProduct("what about its SLA?", roster)).toBeNull();
   });
 
   it("inherits the product from conversation history", () => {
-    expect(resolveProduct("what about its SLA?", ["Tell me about Nimbus Relay pricing"])).toBe("relay");
+    expect(resolveProduct("what about its SLA?", ["Tell me about Nimbus Relay pricing"], roster)).toBe(
+      "relay",
+    );
   });
 
   it("prefers the most recently mentioned product", () => {
     const history = ["Tell me about Relay", "Now tell me about Vault pricing"];
-    expect(resolveProduct("what about its SLA?", history)).toBe("vault");
+    expect(resolveProduct("what about its SLA?", history, roster)).toBe("vault");
   });
 
   it("retrieves the inherited product's SLA table for a bare follow-up", () => {
@@ -242,6 +270,44 @@ describe("passage count follows the evidence, not a fixed slice", () => {
     expect(ids).toContain("support-policy.md#priority-definitions");
   });
 
+  it("bounds the passages by prompt tokens, not by a count of chunks", () => {
+    // A count means nothing across documents of different sizes. These six
+    // questions return between one and twelve passages; what they share is that
+    // none of them spends more of the prompt than the budget allows.
+    const questions = [
+      "what products do we have",
+      "Which of our products support SSO via SAML 2.0?",
+      "What are the key differences between the Pro and Enterprise pricing tiers?",
+      "A client is getting a 403 on the Relay API. What should they check first?",
+      "what is relay?",
+    ];
+
+    for (const q of questions) {
+      const { passages } = index.search(q);
+      const spent = estimateTokens(passages.map((p) => formatChunk(p.chunk)).join("\n"));
+      expect(spent).toBeLessThanOrEqual(PASSAGE_TOKEN_BUDGET);
+      expect(passages.length).toBeLessThanOrEqual(MAX_PASSAGES);
+    }
+  });
+
+  it("always includes the best passage, however large it is", () => {
+    // The answer to a tier comparison is one big table. A budget that could reject
+    // it would make the question unanswerable rather than merely expensive.
+    const oversized = new KnowledgeBaseIndex([
+      {
+        id: "huge.md#pricing",
+        file: "huge.md",
+        docTitle: "Nimbus Huge",
+        docDate: null,
+        product: "huge",
+        heading: "Pricing",
+        text: `pricing tier enterprise ${"filler ".repeat(PASSAGE_TOKEN_BUDGET)}`,
+      },
+    ]);
+
+    expect(oversized.search("pricing tier").passages).toHaveLength(1);
+  });
+
   it("still returns breadth for a question that spans the product line", () => {
     // The cutoff must not starve a "which products" question of products.
     const result = index.search("Which of our products support SSO via SAML 2.0?");
@@ -285,13 +351,17 @@ describe("a question about one product does not cite another product's documents
   });
 
   it("finds every product named, not only the last one", () => {
-    expect(findProducts("How does Vault compare to Relay?").sort()).toEqual(["relay", "vault"]);
-    expect(findProducts("Tell me about pricing")).toEqual([]);
+    expect(findProducts("How does Vault compare to Relay?", roster).sort()).toEqual(["relay", "vault"]);
+    expect(findProducts("Tell me about pricing", roster)).toEqual([]);
   });
 
   it("falls back to the carried product only when the question names none", () => {
-    expect(resolveProducts("what about its SLA?", ["Tell me about Vault"])).toEqual(["vault"]);
-    expect(resolveProducts("compare Vault and Relay", ["Tell me about Pulse"]).sort()).toEqual([
+    expect(resolveProducts("what about its SLA?", ["Tell me about Vault"], roster)).toEqual([
+      "vault",
+    ]);
+    expect(
+      resolveProducts("compare Vault and Relay", ["Tell me about Pulse"], roster).sort(),
+    ).toEqual([
       "relay",
       "vault",
     ]);

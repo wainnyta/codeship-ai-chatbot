@@ -36,7 +36,7 @@ Open http://localhost:3000.
 npm test
 ```
 
-142 tests, no network and no API key required.
+146 tests, no network and no API key required.
 
 ---
 
@@ -91,6 +91,12 @@ The resolved query is shown above the sources, and the call is billed separately
 
 The honest cost: a follow-up waits ~2.5s longer before its first token, and the UI says what it is doing during that wait.
 
+### Adding a document is the only step to adding a product
+
+The product roster is derived from the corpus, not listed in source. A document names its product in its own H1 — `# Nimbus Vault`, `# Nimbus Relay release notes` — while a company-wide document is titled `# NimbusStack support policy`, one word, so the required space excludes it without a list of exceptions. Dropping `forge.md` into the folder adds Forge to the roster, to product scoping, to the boost that keeps one product's documents from answering for another, and to the vocabulary behind "what products do we have", with no code change. Verified by doing it.
+
+**Passages are bounded by a token budget, not a count.** Eight chunks is 134 tokens for a troubleshooting question and would be thousands for a corpus written in longer sections; what needs bounding is the prompt. The budget is not a context limit — the whole corpus is ~2,900 tokens against a million-token window, and sending all of it every time would cost about $0.002 a question. It bounds how many near-misses sit between the model and the passage that answers, and how long a source list someone has to scan mid-call. The best passage is always included however large, so a question whose answer is one big table stays answerable.
+
 ### Disagreements are surfaced, not resolved
 
 The supplied corpus contains real contradictions. Two the app finds:
@@ -139,7 +145,7 @@ The context meter warns at 75% (amber) and 90% (red), and recomputes the moment 
 
 ## Testing
 
-Two seams, 142 tests, no network access or API key needed.
+Two seams, 146 tests, no network access or API key needed.
 
 **The chat endpoint** is driven over its real HTTP contract with a fake provider injected at the registry boundary — configuration, not module patching, so the seam stays a genuine boundary. Tests assert what a caller can observe rather than how the internals are arranged, which means the retriever can be rewritten without rewriting the tests. Covered: the six representative questions' retrieval, conflict flagging, empty input reaching no provider, off-corpus questions reaching the model with no passages and under the restricted prompt, silent pre-latch fallback, no fallback after flush and no mixing of two models' text, estimated usage on an aborted stream, truncation, rate-limit messaging, per-model cost, and follow-up resolution — that a rewrite reaches retrieval but never the question the model is asked, that a cut-off or unsearchable rewrite is rejected, that both attempts are billed when one is, and that no rewrite call is made on a first question or an empty one.
 
@@ -184,6 +190,10 @@ Left deliberately, and worth arguing about:
 - **No conversation persistence.** Out of scope per the brief. Refreshing loses the session.
 - **Conflict detection is a candidate finder, and the model is the judge.** Retrieval finds passages covering the same ground; it cannot tell agreement from disagreement, because that is semantic. Those candidates go into the prompt — that is what makes the model look — but the amber banner is raised only when the answer itself declares a contradiction. If a model omits the declaration the UI under-warns while the prose still spells the disagreement out, which is the safe direction.
 - **The relevance floor is a heuristic** — two distinct meaningful terms on one passage, relaxed to one when the question names a product. It is tuned against the representative questions and could still be wrong at the margins. False refusals are the failure mode to watch: a confidently wrong answer is worse, but refusing a question the documents do answer erodes trust just as fast.
+- **Retrieval here is not load-bearing for context, and it is worth knowing which problem it solves.** The corpus is ~2,900 tokens; a million-token window would hold it four hundred times over. Retrieval exists for R2 — showing which passages an answer came from — and for attention. The token cost of the alternative was measured; the attention claim is the standard one and was not measured on this corpus.
+
+- **The relevance mechanisms lose selectivity as the corpus grows.** The evidence bar is an absolute number of matched terms while the corpus grows around it, so more passages clear it over time, not fewer: a broad question already clears it on 33 of 38 chunks, and the budget is what actually bounds the result. In rough order of when they would bite: the hand-written synonym map needs an entry per new domain; the relevance floor and evidence bar keep decaying; `search()` scores every chunk linearly and would want an inverted index somewhere in the thousands; lexical-only retrieval loses to vocabulary mismatch as the corpus diversifies, which is where embeddings and reranking start paying for themselves; and only at roughly 4MB of markdown does the corpus stop fitting the context window at all.
+
 - **An off-corpus question now costs a model call.** It used to be answered deterministically for nothing, which was a nice property and also why the assistant could not say hello. The structural defence — no passages, so nothing citable — is what actually prevents invention, and that is unchanged; the free short-circuit was never what guaranteed it.
 
 - **The rewrite is load-bearing for dependent follow-ups.** It falls back across providers like every other call, but if all three are unreachable, "how can I use it" degrades to the honest refusal rather than to a worse answer. That is the right direction to fail in, and it is a real availability dependency that did not exist before.
