@@ -261,9 +261,27 @@ input {
   line-height: 1.5;
 }
 
+/*
+ * Nibo speaks the reply, so everything the assistant produced — prose, sources,
+ * the usage line — is indented under its avatar, and the reader can see at a
+ * glance where one side of the conversation ends and the other begins.
+ */
 .answer {
   margin-top: 18px;
   align-self: stretch;
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+}
+
+.answer .avatar {
+  flex: none;
+  margin-top: 1px;
+}
+
+.reply {
+  flex: 1;
+  min-width: 0;
 }
 
 .answer-body {

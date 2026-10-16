@@ -36,8 +36,15 @@ const STARTERS: Array<{ q: string; product?: string }> = [
   { q: "What's the SLA for Priority 1 tickets on Nimbus Vault?", product: "vault" },
 ];
 
-/** Which stage of the request Nibo should be showing. */
-function workingState(turn: Turn, index: number): NiboState {
+/**
+ * Which stage of the request Nibo should be showing.
+ *
+ * Once any text has arrived Nibo goes back to idle rather than disappearing: it is
+ * the speaker of the reply, not a spinner, and a speaker that vanishes the moment
+ * it starts talking is a loading indicator wearing a face.
+ */
+function avatarState(turn: Turn, index: number): NiboState {
+  if (!turn.streaming || turn.answer) return "idle";
   if (turn.passages.length) return "searching";
   return index > 0 ? "thinking" : "searching";
 }
@@ -361,6 +368,9 @@ export function Chat({ products }: { products: string[] }) {
             <h2 className="question">{turn.question}</h2>
 
             <div className="answer">
+              <Nibo className="avatar" state={avatarState(turn, index)} size={34} />
+
+              <div className="reply">
               {declared ? (
                 <div className="banner conflict">
                   <h4>These documents don&rsquo;t agree</h4>
@@ -387,7 +397,6 @@ export function Chat({ products }: { products: string[] }) {
                 */}
               {turn.streaming && !answerText ? (
                 <p className="working">
-                  <Nibo state={workingState(turn, index)} size={40} />
                   {turn.passages.length
                     ? `Reading ${turn.passages.length} passage${turn.passages.length === 1 ? "" : "s"}…`
                     : index > 0
@@ -398,7 +407,10 @@ export function Chat({ products }: { products: string[] }) {
 
               <Answer
                 text={answerText}
-                streaming={turn.streaming}
+                // The caret trails text being written, so it waits for there to be
+                // some. Before that the status line above already says what is
+                // happening, and a blinking block under it says it a second time.
+                streaming={turn.streaming && Boolean(answerText)}
                 onCite={(id) => jumpToPassage(turn.id, id)}
               />
 
@@ -455,6 +467,7 @@ export function Chat({ products }: { products: string[] }) {
                   ) : null}
                 </div>
               ) : null}
+              </div>
             </div>
           </article>
           );

@@ -27,6 +27,7 @@ interface NiboProps {
   state?: NiboState;
   /** Rendered width in px. The drawing keeps a 5:4 ratio. */
   size?: number;
+  className?: string;
 }
 
 /**
@@ -49,10 +50,10 @@ function CloudShape() {
   );
 }
 
-export function Nibo({ state = "idle", size = 56 }: NiboProps) {
+export function Nibo({ state = "idle", size = 56, className = "" }: NiboProps) {
   return (
     <svg
-      className={`nibo nibo-${state}`}
+      className={`nibo nibo-${state} ${className}`.trim()}
       viewBox="0 0 100 80"
       width={size}
       height={size * 0.8}
