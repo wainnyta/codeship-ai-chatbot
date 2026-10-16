@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Answer } from "./Answer";
+import { ModelPicker } from "./ModelPicker";
 import { Sources } from "./Sources";
 import type { PublicModel } from "@/lib/config";
 import type { AnsweringModel, PassageView, StreamEvent } from "@/lib/providers/types";
@@ -278,36 +279,19 @@ export function Chat() {
   return (
     <div className="app">
       <header className="topbar">
-        <div className="wordmark">
-          NimbusStack Product Assistant <span>· answers from the documentation only</span>
+        <div className="titles">
+          <h1>NimbusStack Product Assistant</h1>
+          <p>Answers from NimbusStack&rsquo;s own documentation, with the passages they came from.</p>
         </div>
 
-        <div className="topbar-actions">
-          <div className="picker">
-            <select
-              value={selectedId}
-              onChange={(e) => setSelectedId(e.target.value)}
-              aria-label="AI model"
-            >
-              {models.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
-                  {m.configured ? "" : " (no key configured)"}
-                </option>
-              ))}
-            </select>
-            {selected ? <div className="picker-note">{selected.description}</div> : null}
-          </div>
-
-          <button
-            type="button"
-            className="ghost-button"
-            onClick={() => setTurns([])}
-            disabled={busy || !turns.length}
-          >
-            New conversation
-          </button>
-        </div>
+        <button
+          type="button"
+          className="ghost-button"
+          onClick={() => setTurns([])}
+          disabled={busy || !turns.length}
+        >
+          New conversation
+        </button>
       </header>
 
       <div className="transcript" ref={transcriptRef}>
@@ -445,22 +429,33 @@ export function Chat() {
           send(draft);
         }}
       >
-        <textarea
-          ref={composerRef}
-          rows={1}
-          value={draft}
-          placeholder="Ask about pricing, integrations, SLAs, releases or troubleshooting…"
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              send(draft);
-            }
-          }}
-        />
-        <button type="submit" className="send" disabled={busy || !draft.trim()}>
-          {busy ? "Answering" : "Ask"}
-        </button>
+        <div className="composer-box">
+          <textarea
+            ref={composerRef}
+            rows={1}
+            value={draft}
+            placeholder="Ask about pricing, integrations, SLAs, releases or troubleshooting…"
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                send(draft);
+              }
+            }}
+          />
+
+          <div className="composer-foot">
+            <ModelPicker
+              models={models}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              disabled={busy}
+            />
+            <button type="submit" className="send" disabled={busy || !draft.trim()}>
+              {busy ? "Answering" : "Ask"}
+            </button>
+          </div>
+        </div>
       </form>
     </div>
   );

@@ -12,6 +12,10 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/chat": ["./nimbusstack-knowledge-base/**"],
   },
+
+  // The dev-only badge sits bottom-left, directly over the model picker, so it
+  // covers the control during a local walkthrough.
+  devIndicators: false,
 };
 
 export default nextConfig;
