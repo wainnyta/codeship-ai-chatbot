@@ -467,7 +467,7 @@ describe("follow-up questions are resolved before retrieval", () => {
 
     // Without the rewrite this question reaches the index as `use`, matches
     // nothing, and is refused as off-corpus.
-    expect(textOf(events)).not.toMatch(/isn't covered in the NimbusStack knowledge base/i);
+    expect(textOf(events)).not.toBe(NOT_IN_KB_MESSAGE);
     expect(find(events, "meta")?.passages.length).toBeGreaterThan(0);
     expect(fake.calls).toEqual([GEMINI]);
   });

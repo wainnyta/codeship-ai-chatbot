@@ -28,7 +28,7 @@ RULES
 
 /** The deterministic reply when nothing in the corpus is relevant (E2). */
 export const NOT_IN_KB_MESSAGE =
-  "That isn't covered in the NimbusStack knowledge base. I can only answer from the documentation for Nimbus Relay, Vault, Pulse and Ledger, and nothing in those documents addresses this. You'll need to check with the product team rather than rely on a guess from me.";
+  "Sorry, I can't answer that. I can only answer questions pertaining to the NimbusStack knowledge base.";
 
 /**
  * The prompt used when retrieval found nothing.
