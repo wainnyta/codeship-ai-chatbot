@@ -105,7 +105,20 @@ export function Sources({
         <span className="sources-from">
           from {documents.size} {documents.size === 1 ? "document" : "documents"}
         </span>
-        {flaggedCount ? <span className="sources-flagged">{flaggedCount} flagged</span> : null}
+        {flaggedCount ? (
+          /*
+           * "Flagged" said that something was true of these passages without
+           * saying what, and the only other place the reader could have learned
+           * it was the banner above, which does not use the word. Saying it the
+           * same way the banner does ties the count to the warning it belongs to.
+           */
+          <span
+            className="sources-flagged"
+            title={`${flaggedCount} of these passages are part of the disagreement reported above. They are marked in the list below.`}
+          >
+            {flaggedCount} don&rsquo;t agree
+          </span>
+        ) : null}
         <span className="sources-hint">{open ? "hide" : "show"}</span>
       </button>
 
@@ -129,6 +142,16 @@ export function Sources({
                   <span className="source-where">
                     {p.docTitle} — {p.heading}
                   </span>
+                  {/*
+                    * Named, not just tinted. An amber left border was the only
+                    * thing marking these rows, which says nothing to a reader who
+                    * cannot separate the colours and nothing at all to a screen
+                    * reader — and this is the mark that tells someone mid-call not
+                    * to quote the figure yet.
+                    */}
+                  {flagged.has(p.id) ? (
+                    <span className="source-flag">doesn&rsquo;t agree</span>
+                  ) : null}
                   {p.docDate ? <span className="source-date">{p.docDate}</span> : null}
                 </button>
                 {isOpen ? (

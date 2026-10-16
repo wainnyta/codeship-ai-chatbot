@@ -567,6 +567,24 @@ input {
 }
 
 /* Dates earn their prominence: comparing them is how a reader settles a conflict. */
+.source-flag {
+  margin-left: auto;
+  flex: none;
+  font-family: var(--sans);
+  font-size: 10.5px;
+  letter-spacing: 0.01em;
+  color: var(--conflict);
+  background: var(--conflict-wash);
+  border-radius: 2px;
+  padding: 1px 5px;
+  white-space: nowrap;
+}
+
+/* The date keeps its place when a flag has already claimed the free space. */
+.source-flag + .source-date {
+  margin-left: 0;
+}
+
 .source-date {
   margin-left: auto;
   font-family: var(--mono);
