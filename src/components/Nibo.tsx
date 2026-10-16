@@ -10,18 +10,15 @@
  *
  *   thinking   a follow-up is being resolved into a standalone question
  *   searching  the knowledge base has been searched and passages are being read
+ *   answering  a model is streaming the reply
  *   idle       nothing is in flight
- *
- * There is deliberately no state for "writing the answer": the answer itself is
- * streaming word by word on screen at that point, and a second indicator saying
- * the same thing would be noise.
  *
  * So the animation is a status indicator that happens to have a face, and it
  * cannot drift out of sync with the thing it reports. The accompanying text says
  * the same thing in words, which is why this carries aria-hidden: a screen reader
  * should hear the sentence once, not twice.
  */
-export type NiboState = "idle" | "thinking" | "searching";
+export type NiboState = "idle" | "thinking" | "searching" | "answering";
 
 interface NiboProps {
   state?: NiboState;

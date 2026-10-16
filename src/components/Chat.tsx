@@ -37,16 +37,39 @@ const STARTERS: Array<{ q: string; product?: string }> = [
 ];
 
 /**
- * Which stage of the request Nibo should be showing.
+ * What Nibo is doing, and what it says it is doing.
  *
- * Once any text has arrived Nibo goes back to idle rather than disappearing: it is
- * the speaker of the reply, not a spinner, and a speaker that vanishes the moment
- * it starts talking is a loading indicator wearing a face.
+ * One character, in one place, reporting the single thing in flight — rather than
+ * an avatar beside every answer, which by the fifth turn is wallpaper. Idle is a
+ * real state here and needs a line of its own, so the bar never sits blank.
  */
-function avatarState(turn: Turn, index: number): NiboState {
-  if (!turn.streaming || turn.answer) return "idle";
-  if (turn.passages.length) return "searching";
-  return index > 0 ? "thinking" : "searching";
+const IDLE_LINES = [
+  "Waiting for a question.",
+  "Ready when you are.",
+  "Standing by, documents open.",
+  "Nothing in flight.",
+  "Ask away — I'll show my sources.",
+  "Four products. No guessing.",
+];
+
+function activity(
+  turns: Turn[],
+  idleLine: string,
+): { state: NiboState; line: string } {
+  const live = turns.at(-1);
+  if (!live?.streaming) return { state: "idle", line: idleLine };
+
+  // Said here rather than beside the answer: the bar is not adjacent to the text,
+  // so it is reporting rather than repeating.
+  if (live.answer) return { state: "answering", line: "Writing the answer…" };
+
+  if (live.passages.length) {
+    const n = live.passages.length;
+    return { state: "searching", line: `Reading ${n} passage${n === 1 ? "" : "s"}…` };
+  }
+  return turns.length > 1
+    ? { state: "thinking", line: "Working out what you mean…" }
+    : { state: "searching", line: "Looking through the knowledge base…" };
 }
 
 function newTurn(question: string): Turn {
@@ -71,6 +94,15 @@ export function Chat({ products }: { products: string[] }) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  const [idleLine, setIdleLine] = useState(IDLE_LINES[0]);
+
+  useEffect(() => {
+    if (busy) return;
+    const pick = () => setIdleLine(IDLE_LINES[Math.floor(Math.random() * IDLE_LINES.length)]);
+    pick();
+    const timer = setInterval(pick, 9000);
+    return () => clearInterval(timer);
+  }, [busy]);
 
   const transcriptRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -242,6 +274,7 @@ export function Chat({ products }: { products: string[] }) {
   }, [turns]);
 
   const context = contextStatus(contextTokens, selected?.contextWindow ?? 0);
+  const live = activity(turns, idleLine);
 
   const exportSession = (format: "csv" | "json") => {
     const rows = turns
@@ -333,7 +366,6 @@ export function Chat({ products }: { products: string[] }) {
         {!turns.length ? (
           <div className="empty">
             <div className="greeting">
-              <Nibo size={64} />
               <h2>
                 Hi! I&rsquo;m Nibo — the NimbusStack product assistant. Ask me anything and
                 I&rsquo;ll look it up in the knowledge base and give you the best answer I can
@@ -372,9 +404,6 @@ export function Chat({ products }: { products: string[] }) {
             <h2 className="question">{turn.question}</h2>
 
             <div className="answer">
-              <Nibo className="avatar" state={avatarState(turn, index)} size={34} />
-
-              <div className="reply">
               {declared ? (
                 <div className="banner conflict">
                   <h4>These documents don&rsquo;t agree</h4>
@@ -389,23 +418,6 @@ export function Chat({ products }: { products: string[] }) {
               {turn.rewrite && turn.rewrite.query !== turn.question ? (
                 <p className="resolved-query">
                   Searched for <code>{turn.rewrite.query}</code>
-                </p>
-              ) : null}
-
-              {/*
-                * Say what is happening during the wait. A follow-up is resolved by a
-                * provider call before retrieval can start, which adds a couple of
-                * seconds — and a caret blinking against nothing for that long reads
-                * as a hang. Naming the step also makes the resolved query that
-                * appears next make sense, rather than arriving unexplained.
-                */}
-              {turn.streaming && !answerText ? (
-                <p className="working">
-                  {turn.passages.length
-                    ? `Reading ${turn.passages.length} passage${turn.passages.length === 1 ? "" : "s"}…`
-                    : index > 0
-                      ? "Working out what you mean…"
-                      : "Looking through the knowledge base…"}
                 </p>
               ) : null}
 
@@ -471,11 +483,15 @@ export function Chat({ products }: { products: string[] }) {
                   ) : null}
                 </div>
               ) : null}
-              </div>
             </div>
           </article>
           );
         })}
+      </div>
+
+      <div className="nibo-bar">
+        <Nibo state={live.state} size={30} />
+        <span className="nibo-says">{live.line}</span>
       </div>
 
       <div className="usage">
