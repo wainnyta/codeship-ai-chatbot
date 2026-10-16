@@ -204,24 +204,38 @@ input {
   padding: 0 4px;
 }
 
-.answer-table {
+/* Shared by answers and source passages: both are markdown and both are mostly
+   tables, so one renderer and one table style serve both. */
+.md-table-wrap {
+  overflow-x: auto;
+  margin: 0 0 0.9em;
+}
+
+.md-table {
   font-family: var(--sans);
   font-size: 13.5px;
   border-collapse: collapse;
-  margin: 0 0 0.9em;
   width: 100%;
 }
 
-.answer-table th,
-.answer-table td {
+.md-table th,
+.md-table td {
   border: 1px solid var(--rule);
   padding: 6px 10px;
   text-align: left;
+  vertical-align: top;
 }
 
-.answer-table th {
+.md-table th {
   background: var(--paper);
   font-weight: 600;
+  white-space: nowrap;
+}
+
+.md-heading {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 0.5em;
 }
 
 /* Inline citation chip — ties a claim to the passage that supports it. */
@@ -419,17 +433,61 @@ input {
   flex: none;
 }
 
-.source-text {
+/* The passage body reads as a document excerpt rather than generated prose: the
+   tinted panel and the raw-markdown escape hatch carry the "this is verbatim"
+   signal that the mono typeface used to. */
+.source-body {
+  border-top: 1px solid var(--rule);
+  background: var(--paper);
+  padding: 10px 11px 8px;
+}
+
+.source-md {
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.source-md p {
+  margin: 0 0 0.6em;
+}
+
+.source-md ul {
+  margin: 0 0 0.6em;
+  padding-left: 1.1em;
+}
+
+.source-md li {
+  margin-bottom: 0.25em;
+}
+
+.source-md > :last-child {
+  margin-bottom: 0;
+}
+
+.source-raw {
   font-family: var(--mono);
   font-size: 12px;
   line-height: 1.55;
   white-space: pre-wrap;
   overflow-x: auto;
   margin: 0;
-  padding: 10px 11px 12px;
-  border-top: 1px solid var(--rule);
-  background: var(--paper);
   color: var(--ink);
+}
+
+.raw-toggle {
+  background: none;
+  border: none;
+  padding: 6px 0 0;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--slate);
+}
+
+.raw-toggle:hover {
+  color: var(--cite);
 }
 
 /* ---------- per-message meta ---------- */

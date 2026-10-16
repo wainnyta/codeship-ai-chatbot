@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { PassageView } from "@/lib/providers/types";
+import { Markdown } from "./Markdown";
 
 /**
  * The passages an answer was built from (R2).
@@ -32,6 +33,8 @@ export function Sources({
   const flagged = new Set(conflicts.flat());
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  /** Passages the reader switched back to verbatim markdown source. */
+  const [raw, setRaw] = useState<Set<string>>(new Set());
 
   // A citation chip in the answer should land on the passage itself, not on a
   // closed drawer the reader then has to go hunting through.
@@ -52,6 +55,14 @@ export function Sources({
 
   const documents = new Set(passages.map((p) => p.file));
   const flaggedCount = passages.filter((p) => flagged.has(p.id)).length;
+
+  const toggleRaw = (id: string) =>
+    setRaw((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const toggle = (id: string) =>
     setExpanded((prev) => {
@@ -102,7 +113,20 @@ export function Sources({
                   </span>
                   {p.docDate ? <span className="source-date">{p.docDate}</span> : null}
                 </button>
-                {isOpen ? <pre className="source-text">{p.text}</pre> : null}
+                {isOpen ? (
+                  <div className="source-body">
+                    {raw.has(p.id) ? (
+                      <pre className="source-raw">{p.text}</pre>
+                    ) : (
+                      <div className="md source-md">
+                        <Markdown text={p.text} />
+                      </div>
+                    )}
+                    <button type="button" className="raw-toggle" onClick={() => toggleRaw(p.id)}>
+                      {raw.has(p.id) ? "rendered" : "raw markdown"}
+                    </button>
+                  </div>
+                ) : null}
               </div>
             );
           })}
