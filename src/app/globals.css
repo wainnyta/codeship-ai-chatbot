@@ -891,3 +891,53 @@ input {
   border-left-color: var(--rule);
   opacity: 0.72;
 }
+
+/*
+ * What retrieval was given, when it differs from what was typed. The query itself
+ * is mono because it is the literal string handed to the index, not prose about it
+ * — the same rule that sets verbatim passages in mono and generated answers in
+ * serif. Set quieter than the answer: it explains the evidence, it is not evidence.
+ */
+.resolved-query {
+  margin: 0 0 10px;
+  font-family: var(--sans);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--slate);
+}
+
+.resolved-query code {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 1px 5px;
+}
+
+/* A different provider call from the one that wrote the answer, so: subordinate. */
+.rewrite-cost {
+  opacity: 0.8;
+}
+
+/* Narrates the wait before the first token. Chrome, so sans; quiet, so slate. */
+.working {
+  margin: 0 0 10px;
+  font-family: var(--sans);
+  font-size: 12.5px;
+  color: var(--slate);
+  animation: working-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes working-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .working {
+    animation: none;
+  }
+}

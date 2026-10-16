@@ -144,6 +144,19 @@ function meaningfulTerms(terms: string[]): string[] {
 }
 
 /**
+ * Whether a string contains anything the index could match on.
+ *
+ * Exported so the query rewriter can reject a rewrite that is not a query. A
+ * truncated reply like "What" is non-empty and short enough to look valid, but it
+ * carries no searchable term — and searching it is worse than searching the
+ * original question, because it scores against every document equally and lets
+ * whichever product happens to rank first silently capture the topic.
+ */
+export function hasMeaningfulTerm(text: string): boolean {
+  return meaningfulTerms(tokenize(text)).length > 0;
+}
+
+/**
  * Once the product is known, its own documents outrank everything else.
  *
  * Without this, a 403 question about Relay retrieves *Pulse's* troubleshooting

@@ -5,7 +5,7 @@ import { Answer } from "./Answer";
 import { ModelPicker } from "./ModelPicker";
 import { Sources } from "./Sources";
 import type { PublicModel } from "@/lib/config";
-import type { AnsweringModel, PassageView, StreamEvent } from "@/lib/providers/types";
+import type { AnsweringModel, PassageView, RewriteView, StreamEvent } from "@/lib/providers/types";
 import { activeConflicts, declaresConflict, stripConflictMarker } from "@/lib/citations";
 import { type Usage, contextStatus, estimateTokens, formatCost, sumUsage } from "@/lib/usage";
 
@@ -17,6 +17,8 @@ interface Turn {
   conflicts: Array<[string, string]>;
   model: AnsweringModel | null;
   usage: Usage | null;
+  /** Set when a follow-up was resolved into a standalone query before retrieval. */
+  rewrite: RewriteView | null;
   truncated: boolean;
   error: { message: string; partial: boolean } | null;
   streaming: boolean;
@@ -50,6 +52,7 @@ function newTurn(question: string): Turn {
     conflicts: [],
     model: null,
     usage: null,
+    rewrite: null,
     truncated: false,
     error: null,
     streaming: true,
@@ -157,7 +160,11 @@ export function Chat() {
 
             switch (event.type) {
               case "meta":
-                patch(turn.id, { passages: event.passages, conflicts: event.conflicts });
+                patch(turn.id, {
+                  passages: event.passages,
+                  conflicts: event.conflicts,
+                  rewrite: event.rewrite ?? null,
+                });
                 break;
               case "model":
                 patch(turn.id, { model: event.model });
@@ -200,8 +207,18 @@ export function Chat() {
     transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight });
   }, [turns]);
 
+  /**
+   * Session spend includes the rewrite calls. They are real provider calls with
+   * real tokens, so leaving them out would make the running total quietly wrong —
+   * and a cost panel that undercounts is worse than no cost panel.
+   */
   const sessionUsage = useMemo(
-    () => sumUsage(turns.map((t) => t.usage).filter((u): u is Usage => Boolean(u))),
+    () =>
+      sumUsage(
+        turns
+          .flatMap((t) => [t.usage, t.rewrite?.usage ?? null])
+          .filter((u): u is Usage => Boolean(u)),
+      ),
     [turns],
   );
 
@@ -232,6 +249,10 @@ export function Chat() {
         outputTokens: t.usage!.outputTokens,
         costUsd: t.usage!.costUsd,
         estimated: t.usage!.estimated,
+        searchQuery: t.rewrite?.query ?? t.question,
+        rewriteInputTokens: t.rewrite?.usage.inputTokens ?? 0,
+        rewriteOutputTokens: t.rewrite?.usage.outputTokens ?? 0,
+        rewriteCostUsd: t.rewrite?.usage.costUsd ?? 0,
         sources: t.passages.map((p) => p.id).join(" "),
       }));
 
@@ -239,10 +260,11 @@ export function Chat() {
       format === "json"
         ? JSON.stringify({ messages: rows, total: sessionUsage }, null, 2)
         : [
-            "question,model,model_id,fallback_used,input_tokens,output_tokens,cost_usd,estimated,sources",
+            "question,search_query,model,model_id,fallback_used,input_tokens,output_tokens,cost_usd,estimated,rewrite_input_tokens,rewrite_output_tokens,rewrite_cost_usd,sources",
             ...rows.map((r) =>
               [
                 `"${r.question.replace(/"/g, '""')}"`,
+                `"${r.searchQuery.replace(/"/g, '""')}"`,
                 r.model,
                 r.modelId,
                 r.fallbackUsed,
@@ -250,6 +272,9 @@ export function Chat() {
                 r.outputTokens,
                 r.costUsd.toFixed(8),
                 r.estimated,
+                r.rewriteInputTokens,
+                r.rewriteOutputTokens,
+                r.rewriteCostUsd.toFixed(8),
                 `"${r.sources}"`,
               ].join(","),
             ),
@@ -321,7 +346,7 @@ export function Chat() {
           </div>
         ) : null}
 
-        {turns.map((turn) => {
+        {turns.map((turn, index) => {
           // The answer decides whether a disagreement is real; retrieval only ever
           // produced candidates, and candidates differ run to run depending on
           // which passages a generation happens to cite.
@@ -343,6 +368,29 @@ export function Chat() {
                     figure.
                   </p>
                 </div>
+              ) : null}
+
+              {turn.rewrite && turn.rewrite.query !== turn.question ? (
+                <p className="resolved-query">
+                  Searched for <code>{turn.rewrite.query}</code>
+                </p>
+              ) : null}
+
+              {/*
+                * Say what is happening during the wait. A follow-up is resolved by a
+                * provider call before retrieval can start, which adds a couple of
+                * seconds — and a caret blinking against nothing for that long reads
+                * as a hang. Naming the step also makes the resolved query that
+                * appears next make sense, rather than arriving unexplained.
+                */}
+              {turn.streaming && !answerText ? (
+                <p className="working">
+                  {turn.passages.length
+                    ? `Reading ${turn.passages.length} passage${turn.passages.length === 1 ? "" : "s"}…`
+                    : index > 0
+                      ? "Working out what the question refers to…"
+                      : "Searching the documentation…"}
+                </p>
               ) : null}
 
               <Answer
@@ -394,6 +442,13 @@ export function Chat() {
                         {turn.usage.estimated ? " (estimated)" : ""}
                       </span>
                     </>
+                  ) : null}
+                  {turn.rewrite ? (
+                    <span className="rewrite-cost">
+                      + {turn.rewrite.usage.inputTokens.toLocaleString()} in /{" "}
+                      {turn.rewrite.usage.outputTokens.toLocaleString()} out ·{" "}
+                      {formatCost(turn.rewrite.usage.costUsd)} resolving the question
+                    </span>
                   ) : null}
                 </div>
               ) : null}

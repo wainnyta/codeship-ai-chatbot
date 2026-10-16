@@ -1,7 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { handleChatRequest } from "./handle";
-import { resolveChain } from "../config";
-import type { Adapter, ChatMessage, ProviderUsage, StreamEvent } from "../providers/types";
+import { REWRITE_MODEL_ID, resolveChain } from "../config";
+import type {
+  Adapter,
+  ChatMessage,
+  ProviderUsage,
+  Rewriter,
+  StreamEvent,
+} from "../providers/types";
+import type { BuiltPrompt } from "../prompt";
 import { ProviderError } from "../providers/types";
 
 /**
@@ -38,13 +45,21 @@ interface Fake {
   adapter: Adapter;
   /** Model ids actually asked to generate, in order. */
   calls: string[];
+  /** The prompts those models were given, so what the model saw can be asserted. */
+  prompts: BuiltPrompt[];
+  /** The conversation history forwarded with each call. */
+  histories: ChatMessage[][];
 }
 
 function makeFake(behaviors: Record<string, Behavior>): Fake {
   const calls: string[] = [];
+  const prompts: BuiltPrompt[] = [];
+  const histories: ChatMessage[][] = [];
 
-  const adapter: Adapter = async (model) => {
+  const adapter: Adapter = async (model, prompt, history) => {
     calls.push(model.id);
+    prompts.push(prompt);
+    histories.push(history);
     const b = behaviors[model.id] ?? { deltas: ["Answer ", "from ", model.label] };
 
     if (b.failBefore) throw b.failBefore;
@@ -71,20 +86,33 @@ function makeFake(behaviors: Record<string, Behavior>): Fake {
     };
   };
 
-  return { adapter, calls };
+  return { adapter, calls, prompts, histories };
+}
+
+/** A rewriter that always returns the same standalone query, and counts its calls. */
+function makeRewriter(text: string): { rewriter: Rewriter; calls: number } {
+  const state = {
+    rewriter: (async () => {
+      state.calls += 1;
+      return { text, usage: { inputTokens: 240, outputTokens: 11 }, finishReason: "stop" };
+    }) as Rewriter,
+    calls: 0,
+  };
+  return state;
 }
 
 async function post(
   messages: ChatMessage[],
   modelId: string,
   fake: Fake,
+  rewriter?: Rewriter,
 ): Promise<{ status: number; events: StreamEvent[] }> {
   const request = new Request("http://localhost/api/chat", {
     method: "POST",
     body: JSON.stringify({ messages, modelId }),
   });
 
-  const response = await handleChatRequest(request, { adapter: fake.adapter });
+  const response = await handleChatRequest(request, { adapter: fake.adapter, rewriter });
 
   if (!response.headers.get("Content-Type")?.includes("event-stream")) {
     return { status: response.status, events: [JSON.parse(await response.text())] };
@@ -376,5 +404,187 @@ describe("E9 — a rate-limited provider produces an actionable message", () => 
     expect(message).toMatch(/rate-limited/i);
     expect(message).toMatch(/30 seconds|switch to another model/i);
     expect(message).not.toMatch(/stack|at Object|\.js:\d+/);
+  });
+});
+
+describe("follow-up questions are resolved before retrieval", () => {
+  const followUp: ChatMessage[] = [
+    { role: "user", content: "what is relay?" },
+    { role: "assistant", content: "Nimbus Relay is a managed API gateway [relay.md#overview]." },
+    { role: "user", content: "how can i use it" },
+  ];
+
+  it("answers a follow-up that names neither its product nor its topic", async () => {
+    const fake = makeFake({});
+    const { rewriter } = makeRewriter("how do I use Nimbus Relay authentication and endpoints");
+
+    const { events } = await post(followUp, GEMINI, fake, rewriter);
+
+    // Without the rewrite this question reaches the index as `use`, matches
+    // nothing, and is refused as off-corpus.
+    expect(textOf(events)).not.toMatch(/isn't covered in the NimbusStack knowledge base/i);
+    expect(find(events, "meta")?.passages.length).toBeGreaterThan(0);
+    expect(fake.calls).toEqual([GEMINI]);
+  });
+
+  it("asks the model the question the user typed, not the rewritten one", async () => {
+    const fake = makeFake({});
+    const { rewriter } = makeRewriter("how do I use Nimbus Relay authentication and endpoints");
+
+    await post(followUp, GEMINI, fake, rewriter);
+
+    // The safety property: the rewrite steers retrieval only. A wrong rewrite can
+    // cost us the right passages; it must never change what was asked.
+    expect(fake.prompts[0].userContent).toContain("QUESTION: how can i use it");
+    expect(fake.prompts[0].userContent).not.toContain("QUESTION: how do I use Nimbus Relay");
+  });
+
+  it("tells the model what retrieval was given, so a bad resolution is visible to it", async () => {
+    const fake = makeFake({});
+    const { rewriter } = makeRewriter("how do I use Nimbus Ledger");
+
+    await post(followUp, GEMINI, fake, rewriter);
+
+    expect(fake.prompts[0].userContent).toContain('resolved question "how do I use Nimbus Ledger"');
+  });
+
+  it("reports the resolved query and its cost, separately from the answer's", async () => {
+    const fake = makeFake({ [GEMINI]: { usage: { inputTokens: 1800, outputTokens: 90 } } });
+    const { rewriter } = makeRewriter("how do I use Nimbus Relay");
+
+    const { events } = await post(followUp, GEMINI, fake, rewriter);
+
+    const rewrite = find(events, "meta")?.rewrite;
+    expect(rewrite?.query).toBe("how do I use Nimbus Relay");
+    expect(rewrite?.modelId).toBe(REWRITE_MODEL_ID);
+    expect(rewrite?.usage.inputTokens).toBe(240);
+
+    // The answering model's own numbers stay its own — R4 stays attributable.
+    expect(find(events, "usage")?.usage.inputTokens).toBe(1800);
+  });
+
+  it("spends nothing resolving the first question of a conversation", async () => {
+    const fake = makeFake({});
+    const rewriter = makeRewriter("rewritten");
+
+    const { events } = await post(ask("what is relay?"), GEMINI, fake, rewriter.rewriter);
+
+    expect(rewriter.calls).toBe(0);
+    expect(find(events, "meta")?.rewrite).toBeUndefined();
+  });
+
+  it("falls back to another provider when the rewrite model is unavailable", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fake = makeFake({});
+
+    let attempts = 0;
+    const flaky: Rewriter = async (model) => {
+      attempts += 1;
+      if (model.id === REWRITE_MODEL_ID) throw new Error("503 service unavailable");
+      return {
+        text: "how do I use Nimbus Relay",
+        usage: { inputTokens: 240, outputTokens: 11 },
+        finishReason: "stop",
+      };
+    };
+
+    const { events } = await post(followUp, GEMINI, fake, flaky);
+
+    expect(attempts).toBe(2);
+    expect(find(events, "meta")?.rewrite?.modelId).not.toBe(REWRITE_MODEL_ID);
+    expect(find(events, "meta")!.passages.length).toBeGreaterThan(0);
+    warn.mockRestore();
+  });
+
+  it("rejects a rewrite the model was cut off mid-way through", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fake = makeFake({});
+
+    const cutOff: Rewriter = async (model) =>
+      model.id === REWRITE_MODEL_ID
+        ? // What this actually looked like in production: thinking tokens spent the
+          // output budget and the query arrived as its first word.
+          { text: "What", usage: { inputTokens: 240, outputTokens: 512 }, finishReason: "length" }
+        : {
+            text: "what is Nimbus Relay's Priority 1 support SLA",
+            usage: { inputTokens: 240, outputTokens: 14 },
+            finishReason: "stop",
+          };
+
+    const { events } = await post(followUp, GEMINI, fake, cutOff);
+    const rewrite = find(events, "meta")?.rewrite;
+
+    expect(rewrite?.query).toBe("what is Nimbus Relay's Priority 1 support SLA");
+    // Both attempts are billed, so both are reported.
+    expect(rewrite?.usage.outputTokens).toBe(526);
+    warn.mockRestore();
+  });
+
+  it("ignores a rewrite with nothing searchable in it", async () => {
+    const fake = makeFake({});
+    const { rewriter } = makeRewriter("what is it");
+
+    const { events } = await post(followUp, GEMINI, fake, rewriter);
+
+    // "what is it" finishes cleanly and is short enough to look like a query, but
+    // carries no searchable term — so the question as typed is used instead. That
+    // question is itself unsearchable, so this ends in the honest refusal rather
+    // than in a confident answer retrieved against noise.
+    expect(find(events, "meta")?.rewrite?.query).toBe("how can i use it");
+    expect(fake.calls).toEqual([]);
+  });
+
+  it("refuses rather than invents when every rewrite provider is down", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fake = makeFake({});
+    const dead: Rewriter = async () => {
+      throw new Error("503 service unavailable");
+    };
+
+    const { events } = await post(followUp, GEMINI, fake, dead);
+
+    // The honest outcome. Searching `use` matches nothing, so this question is
+    // refused — exactly as it was before rewriting existed. No answering model is
+    // asked, so there is nothing for one to guess at.
+    expect(find(events, "meta")?.rewrite).toBeUndefined();
+    expect(fake.calls).toEqual([]);
+    expect(textOf(events)).toMatch(/isn't covered in the NimbusStack knowledge base/i);
+    expect(find(events, "error")).toBeUndefined();
+    warn.mockRestore();
+  });
+
+  it("does not call the rewriter for an empty message (E10 still holds)", async () => {
+    const fake = makeFake({});
+    const rewriter = makeRewriter("rewritten");
+
+    const { status } = await post(
+      [{ role: "user", content: "what is relay?" }, { role: "user", content: "  " }],
+      GEMINI,
+      fake,
+      rewriter.rewriter,
+    );
+
+    expect(status).toBe(400);
+    expect(rewriter.calls).toBe(0);
+    expect(fake.calls).toEqual([]);
+  });
+
+  it("reports the rewrite cost even on an off-corpus follow-up (E2)", async () => {
+    const fake = makeFake({});
+    const { rewriter } = makeRewriter("what is the capital of France");
+
+    const { events } = await post(
+      [...followUp.slice(0, 2), { role: "user", content: "and its capital?" }],
+      GEMINI,
+      fake,
+      rewriter,
+    );
+
+    expect(fake.calls).toEqual([]);
+    expect(textOf(events)).toMatch(/isn't covered in the NimbusStack knowledge base/i);
+    // The answer cost nothing. Resolving the question did, and that is reported
+    // rather than hidden — otherwise session spend silently drifts.
+    expect(find(events, "usage")?.usage.costUsd).toBe(0);
+    expect(find(events, "meta")?.rewrite?.usage.inputTokens).toBe(240);
   });
 });

@@ -7,6 +7,9 @@
   "$fallbackOrderComment": "Tried in order when the selected model cannot produce a reply. The selected model is always tried first and then skipped here.",
   "fallbackOrder": ["gemini-3.8-flash", "gpt-6.1-sol", "claude-opus-5-5"],
 
+  "$rewriteModelComment": "Used for the pre-retrieval query rewrite that resolves a follow-up (\"how can I use it\", \"and for relay?\") into a standalone search query. It writes nothing the reader sees, so only speed and price matter — but measure rather than assume, because the cheapest per-token model is not the cheapest per rewrite. Measured over three real follow-ups: GPT-6.1 Sol 2519ms / 24 output tokens / $0.00076, Claude Opus 5.5 2855ms / 37 / $0.00247, Gemini 3.8 Flash 4129ms / 412 / $0.00174. Gemini has the lowest token price and the highest bill, because its thinking tokens are billed as output and it spends ~400 of them on a one-line rewrite (thinkingConfig.thinkingBudget: 0 is accepted and ignored on that model). All three resolve these follow-ups correctly, so this is decided on cost and latency alone.",
+  "rewriteModelId": "gpt-6.1-sol",
+
   "models": [
     {
       "id": "gemini-3.8-flash",

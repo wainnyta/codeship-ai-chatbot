@@ -1,9 +1,9 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
-import { streamText, type LanguageModel } from "ai";
+import { generateText, streamText, type LanguageModel } from "ai";
 import type { ModelConfig } from "../config";
-import { ProviderError, type Adapter } from "./types";
+import { ProviderError, type Adapter, type Rewriter } from "./types";
 
 /**
  * The only place in the application where a provider API key is read.
@@ -79,5 +79,43 @@ export const liveAdapter: Adapter = async (model, prompt, history, signal) => {
       outputTokens: u.outputTokens ?? 0,
     })),
     finishReason: Promise.resolve(result.finishReason).then((r) => String(r)),
+  };
+};
+
+/**
+ * The live query rewriter. Non-streaming on purpose: nothing waits on its first
+ * token, only on its last, so streaming would add machinery and no benefit.
+ *
+ * Errors are thrown rather than classified. The caller treats every failure
+ * identically — search the question as typed — so there is nothing for a code or a
+ * user-facing message to change, and this call must never surface to the reader.
+ * The output cap is low because the output is one line; a model that ignores that
+ * is cut off rather than billed for an essay.
+ */
+export const liveRewriter: Rewriter = async (model, system, userContent, signal) => {
+  const result = await generateText({
+    model: languageModel(model),
+    system,
+    prompt: userContent,
+    /**
+     * Generous for a one-line answer because on models that cannot disable
+     * thinking, reasoning tokens are billed as output and spend this budget before
+     * a single visible character is produced. At 120 this silently truncated
+     * Gemini's query to its first word. The real cost control is that the output
+     * IS one line: typical spend is ~15 visible tokens plus whatever the model
+     * thinks, not this ceiling.
+     */
+    maxOutputTokens: 512,
+    abortSignal: signal,
+    providerOptions: model.providerOptions as Parameters<typeof generateText>[0]["providerOptions"],
+  });
+
+  return {
+    text: result.text,
+    usage: {
+      inputTokens: result.usage.inputTokens ?? 0,
+      outputTokens: result.usage.outputTokens ?? 0,
+    },
+    finishReason: String(result.finishReason),
   };
 };

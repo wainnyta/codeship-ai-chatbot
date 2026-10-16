@@ -17,6 +17,8 @@ export interface ModelConfig {
 interface ModelsFile {
   defaultModelId: string;
   fallbackOrder: string[];
+  /** Model used for the pre-retrieval query rewrite. Defaults to defaultModelId. */
+  rewriteModelId?: string;
   models: ModelConfig[];
 }
 
@@ -45,6 +47,9 @@ function validate(c: ModelsFile): ModelsFile {
   for (const id of c.fallbackOrder) {
     if (!ids.has(id)) throw new Error(`config/models.json: fallbackOrder references unknown model "${id}"`);
   }
+  if (c.rewriteModelId && !ids.has(c.rewriteModelId)) {
+    throw new Error(`config/models.json: rewriteModelId "${c.rewriteModelId}" is not a defined model`);
+  }
 
   return c;
 }
@@ -52,6 +57,15 @@ function validate(c: ModelsFile): ModelsFile {
 const validated = validate(config);
 
 export const DEFAULT_MODEL_ID = validated.defaultModelId;
+
+/**
+ * The model that rewrites follow-up questions into standalone search queries.
+ * Configured rather than hard-coded for the same reason as everything else here
+ * (R3), and separate from the answering model because the job is different: it is
+ * throwaway utility output, so it should always run on the cheapest fast model
+ * regardless of which model the user picked to answer with.
+ */
+export const REWRITE_MODEL_ID = validated.rewriteModelId ?? validated.defaultModelId;
 
 export function listModels(): ModelConfig[] {
   return validated.models;

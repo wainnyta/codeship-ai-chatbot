@@ -6,6 +6,7 @@ import {
   type Adapter,
   type ChatMessage,
   type PassageView,
+  type RewriteView,
   type StreamEvent,
   ProviderError,
   classifyError,
@@ -19,6 +20,8 @@ export interface RunChatOptions {
   history: ChatMessage[];
   retrieval: RetrievalResult;
   adapter: Adapter;
+  /** Present when a rewrite call was made, so its cost is reported (R4). */
+  rewrite?: RewriteView;
   signal?: AbortSignal;
 }
 
@@ -57,9 +60,14 @@ function promptTokens(prompt: BuiltPrompt, history: ChatMessage[]): number {
  * is therefore still recoverable, and the held token costs nothing perceptible.
  */
 export async function* runChat(options: RunChatOptions): AsyncGenerator<StreamEvent> {
-  const { chain, selectedId, prompt, history, retrieval, adapter, signal } = options;
+  const { chain, selectedId, prompt, history, retrieval, adapter, rewrite, signal } = options;
 
-  yield { type: "meta", passages: toPassageViews(retrieval), conflicts: retrieval.conflicts };
+  yield {
+    type: "meta",
+    passages: toPassageViews(retrieval),
+    conflicts: retrieval.conflicts,
+    ...(rewrite ? { rewrite } : {}),
+  };
 
   if (chain.length === 0) {
     yield {

@@ -36,7 +36,7 @@ Open http://localhost:3000.
 npm test
 ```
 
-111 tests, no network and no API key required.
+136 tests, no network and no API key required.
 
 ---
 
@@ -46,6 +46,8 @@ npm test
 question
    │
    ├─ empty?  ────────────────────────────────►  rejected, no provider called
+   │
+   ├─ follow-up? rewrite into a standalone query  (one cheap model call)
    │
    ├─ retrieve (BM25 over heading-split chunks)
    │     │
@@ -67,7 +69,21 @@ The corpus in `nimbusstack-knowledge-base/` is used exactly as supplied and neve
 
 **Retrieval is lexical (BM25), not embeddings.** The corpus is ~15KB across ten files. An embedding index would add a provider dependency and a build step for no measurable recall benefit at this size, and would blur exactly the tokens these questions turn on — `P1`, `Pro`, `4.2`, `SAML`, `403`. Chunks are never split mid-table, so a tier lookup keeps the column headers that tell Pro from Enterprise.
 
-A synonym map lets loosely worded questions land: "does it do single sign-on?" reaches material filed under SAML, OIDC and federated sign-in. When a question names no product, the most recently discussed one is carried over, so "what about its SLA?" works as a follow-up.
+A synonym map lets loosely worded questions land: "does it do single sign-on?" reaches material filed under SAML, OIDC and federated sign-in.
+
+### Follow-up questions are resolved before they are searched
+
+"How can I use it" is not a searchable query. The subject lives in the previous turn, and so does the topic — the index receives `use`, matches nothing, and the question is honestly but uselessly refused.
+
+Coreference is semantic, so a model resolves it and string matching cannot. Before retrieval, one cheap non-streaming call rewrites the follow-up into a standalone query against the recent conversation — the standard pre-retrieval step in conversational RAG, and what a tool-calling assistant does implicitly when it writes its own search query. Retrieval then sees `how can I use Nimbus Relay`, and "and for relay?" after a Vault SLA question becomes `what's the SLA for Priority 1 tickets on Nimbus Relay?` — the product *and* the topic carried, where the old heuristic carried only the product.
+
+**The rewrite feeds retrieval and nothing else.** The answering model still receives the question verbatim and the real conversation history, and is told what retrieval was given so it can object if the resolution looks wrong. A bad rewrite therefore costs passage quality; it cannot change what was asked or what may be claimed. Every failure path — provider down, empty output, a reply cut off mid-query, a rewrite with no searchable word in it — falls back to the question as typed, which is the behaviour that existed before this step did.
+
+The resolved query is shown above the sources, and the call is billed separately in the usage strip rather than folded into the answer's numbers, so per-message cost stays attributable to the model that wrote the answer.
+
+**The rewrite model is chosen on measurement, not on list price.** Over three real follow-ups: GPT-6.1 Sol 2519ms / 24 output tokens / $0.00076, Claude Opus 5.5 2855ms / 37 / $0.00247, Gemini 3.8 Flash 4129ms / 412 / $0.00174. Gemini has the lowest token price and the highest bill, because thinking tokens are billed as output and it spends ~400 of them on a one-line rewrite. All three resolve correctly, so `rewriteModelId` in `config/models.json` points at the fastest and cheapest. Changing it is a config edit.
+
+The honest cost: a follow-up waits ~2.5s longer before its first token, and the UI says what it is doing during that wait.
 
 ### Disagreements are surfaced, not resolved
 
@@ -117,9 +133,9 @@ The context meter warns at 75% (amber) and 90% (red), and recomputes the moment 
 
 ## Testing
 
-Two seams, 111 tests, no network access or API key needed.
+Two seams, 136 tests, no network access or API key needed.
 
-**The chat endpoint** is driven over its real HTTP contract with a fake provider injected at the registry boundary — configuration, not module patching, so the seam stays a genuine boundary. Tests assert what a caller can observe rather than how the internals are arranged, which means the retriever can be rewritten without rewriting the tests. Covered: the six representative questions' retrieval, conflict flagging, empty input reaching no provider, off-corpus questions reaching no provider, silent pre-latch fallback, no fallback after flush and no mixing of two models' text, estimated usage on an aborted stream, truncation, rate-limit messaging, and per-model cost.
+**The chat endpoint** is driven over its real HTTP contract with a fake provider injected at the registry boundary — configuration, not module patching, so the seam stays a genuine boundary. Tests assert what a caller can observe rather than how the internals are arranged, which means the retriever can be rewritten without rewriting the tests. Covered: the six representative questions' retrieval, conflict flagging, empty input reaching no provider, off-corpus questions reaching no provider, silent pre-latch fallback, no fallback after flush and no mixing of two models' text, estimated usage on an aborted stream, truncation, rate-limit messaging, per-model cost, and follow-up resolution — that a rewrite reaches retrieval but never the question the model is asked, that a cut-off or unsearchable rewrite is rejected, that both attempts are billed when one is, and that no rewrite call is made on a first question or an empty one.
 
 **Token, cost and context arithmetic** is tested as pure functions. This second seam earns its place because the 75%/90% thresholds are unreachable against million-token context windows — synthetic inputs are the only way to exercise them.
 
@@ -145,6 +161,7 @@ Set the same provider keys in the Vercel project's environment variables.
 config/models.json          every model's metadata and the fallback order
 nimbusstack-knowledge-base/ the corpus, exactly as supplied
 src/lib/kb/                 chunking and BM25 retrieval
+src/lib/chat/rewrite.ts     follow-up resolution (the pre-retrieval rewrite)
 src/lib/providers/          adapters, the latch, error classification
 src/lib/chat/handle.ts      the chat endpoint
 src/lib/usage.ts            token, cost and context arithmetic
@@ -161,5 +178,9 @@ Left deliberately, and worth arguing about:
 - **No conversation persistence.** Out of scope per the brief. Refreshing loses the session.
 - **Conflict detection is a candidate finder, and the model is the judge.** Retrieval finds passages covering the same ground; it cannot tell agreement from disagreement, because that is semantic. Those candidates go into the prompt — that is what makes the model look — but the amber banner is raised only when the answer itself declares a contradiction. If a model omits the declaration the UI under-warns while the prose still spells the disagreement out, which is the safe direction.
 - **The relevance floor is a heuristic** — two distinct meaningful terms on one passage, relaxed to one when the question names a product. It is tuned against the representative questions and could still be wrong at the margins. False refusals are the failure mode to watch: a confidently wrong answer is worse, but refusing a question the documents do answer erodes trust just as fast.
-- **Topic carry inherits the most recently mentioned product.** Clean for a follow-up about one product; a conversation ranging across two could inherit the wrong one.
+- **The rewrite is load-bearing for dependent follow-ups.** It falls back across providers like every other call, but if all three are unreachable, "how can I use it" degrades to the honest refusal rather than to a worse answer. That is the right direction to fail in, and it is a real availability dependency that did not exist before.
+
+- **Nothing is persisted.** Conversation state lives in the browser; a refresh clears it. Saving chats between sessions is out of scope per the brief.
+
+- **Topic carry still exists underneath, and inherits the most recently mentioned product.** It is now the degradation path for when the rewrite call fails, not the primary mechanism. A conversation ranging across two products could inherit the wrong one.
 - **No "continue" for truncated replies**, only resend.

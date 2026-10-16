@@ -33,6 +33,40 @@ export type Adapter = (
   signal?: AbortSignal,
 ) => Promise<StreamAttempt>;
 
+/**
+ * The second provider call: a short, non-streaming completion used to rewrite a
+ * follow-up question into a standalone search query.
+ *
+ * Deliberately a separate type from Adapter rather than a mode of it. It produces
+ * no reader-visible text, it is not streamed, it never falls back, and it must
+ * never be able to fail a question — so sharing Adapter's latch, chain and
+ * classification machinery would mean sharing guarantees it does not need and
+ * cannot honour. Tests inject a fake here exactly as they do for Adapter; omitting
+ * it disables rewriting entirely, which is also the production degradation path.
+ */
+export type Rewriter = (
+  model: ModelConfig,
+  system: string,
+  userContent: string,
+  signal?: AbortSignal,
+) => Promise<{
+  text: string;
+  usage: ProviderUsage;
+  /**
+   * "length" when the model was cut off before finishing. Reported because a
+   * truncated rewrite is a half-written query that still looks like a whole one.
+   */
+  finishReason: string;
+}>;
+
+/** How the question reaching retrieval was produced, and what that cost (R4). */
+export interface RewriteView {
+  /** The standalone query retrieval actually searched for. */
+  query: string;
+  modelId: string;
+  usage: Usage;
+}
+
 export type ErrorCode =
   | "auth"
   | "rate_limit"
@@ -65,7 +99,17 @@ export interface AnsweringModel {
 
 export type StreamEvent =
   /** Passages first, so sources render before the answer and survive a dead stream. */
-  | { type: "meta"; passages: PassageView[]; conflicts: Array<[string, string]> }
+  | {
+      type: "meta";
+      passages: PassageView[];
+      conflicts: Array<[string, string]>;
+      /**
+       * Present only when a rewrite changed the question. The reader is shown what
+       * was searched for, because a resolved follow-up is retrieving against words
+       * they never typed and an unexplained passage list would look arbitrary.
+       */
+      rewrite?: RewriteView;
+    }
   /** Which model actually answered. Emitted once the first text is committed. */
   | { type: "model"; model: AnsweringModel }
   | { type: "delta"; text: string }

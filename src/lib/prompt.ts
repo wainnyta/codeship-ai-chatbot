@@ -42,7 +42,11 @@ export interface BuiltPrompt {
  * model to "mention any disagreements" is unreliable; telling it which specific
  * passages disagree is not.
  */
-export function buildPrompt(question: string, retrieval: RetrievalResult): BuiltPrompt {
+export function buildPrompt(
+  question: string,
+  retrieval: RetrievalResult,
+  searchQuery?: string,
+): BuiltPrompt {
   const passages = retrieval.passages.map((p) => formatChunk(p.chunk)).join("\n\n---\n\n");
 
   const conflictNote = retrieval.conflicts.length
@@ -53,15 +57,26 @@ export function buildPrompt(question: string, retrieval: RetrievalResult): Built
         )}\nCompare them carefully. If they genuinely differ, follow rule 5: report the difference, cite both, and give each document's date. If they agree, just answer normally and say nothing about this note.`
     : "";
 
+  /**
+   * What retrieval was actually given. When a follow-up was rewritten, the model
+   * is told so: it explains why the passages answer a question whose wording they
+   * do not match, and it lets the model notice a rewrite that resolved the
+   * reference wrongly instead of answering a question nobody asked.
+   */
+  const resolvedNote =
+    searchQuery && searchQuery !== question
+      ? `\n\n(These passages were retrieved for the resolved question "${searchQuery}", because the question above refers back to earlier messages. Answer the question as the user asked it. If that resolution looks wrong, say what you think they are asking about rather than answering the wrong question.)`
+      : "";
+
   const topicNote = retrieval.product
-    ? `\n\n(Resolved topic: Nimbus ${retrieval.product[0].toUpperCase()}${retrieval.product.slice(1)}. The question may not name it; earlier messages did.)`
+    ? `\n\n(Resolved topic: Nimbus ${retrieval.product[0].toUpperCase()}${retrieval.product.slice(1)}.)`
     : "";
 
   return {
     system: SYSTEM_PROMPT,
     userContent: `PASSAGES FROM THE NIMBUSSTACK KNOWLEDGE BASE:
 
-${passages}${conflictNote}${topicNote}
+${passages}${conflictNote}${topicNote}${resolvedNote}
 
 QUESTION: ${question}`,
   };
