@@ -22,13 +22,26 @@
    * means "evidence" throughout this interface, and the bar is the one place the
    * product gets to say its own name, so it says it in the house colour.
    */
-  --bar: #0a2128;
-  --bar-ink: #f1f7f5;
-  --bar-ink-dim: #80a3a8;
-  --bar-edge: rgba(241, 247, 245, 0.2);
+  /*
+   * The app bar, as four tokens so the whole thing is one edit.
+   *
+   * Deeper than it was and barely teal, because at #0a2128 the hue was doing
+   * enough to read as a colour and not enough to read as the brand's — the muddy
+   * middle. Near-black with a cool cast lets the white wordmark and the mint
+   * accent be the only colour up there, which is where the colour should be.
+   */
+  --bar: #081a1f;
+  --bar-ink: #f4faf8;
+  /*
+   * The subtitle was #80a3a8 at 11.5px: 6:1, which passes, and still unreadable,
+   * because contrast ratios are measured on letterforms larger than that one. The
+   * fix is both — nearly 10:1, and big enough to have strokes worth contrasting.
+   */
+  --bar-ink-dim: #a9cbce;
+  --bar-edge: rgba(244, 250, 248, 0.22);
   --bar-glass: #5ad6bd;
   /* A hairline of the accent, to cut the bar from the page without a shadow. */
-  --bar-rule: rgba(90, 214, 189, 0.22);
+  --bar-rule: rgba(90, 214, 189, 0.3);
 
   --cite: #0e6e62;
   --cite-wash: #e9f3f1;
@@ -144,13 +157,13 @@ input {
 }
 
 .titles p {
-  margin: 1px 0 0;
+  margin: 2px 0 0;
   font-family: var(--sans);
-  font-size: 11.5px;
-  font-weight: 500;
-  letter-spacing: 0.015em;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.005em;
   color: var(--bar-ink-dim);
-  line-height: 1.2;
+  line-height: 1.25;
 }
 
 /*
