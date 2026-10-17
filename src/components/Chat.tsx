@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Answer } from "./Answer";
 import { ModelPicker } from "./ModelPicker";
-import { Nibo, type NiboState } from "./Nibo";
-import { SessionPanel, type SessionRow } from "./SessionPanel";
+import { Nimbo, type NimboState } from "./Nimbo";
+import { SessionChip, SessionDialog, SessionMenu, type SessionRow } from "./SessionPanel";
 import { Sources } from "./Sources";
 import type { PublicModel } from "@/lib/config";
 import type { AnsweringModel, PassageView, RewriteView, StreamEvent } from "@/lib/providers/types";
@@ -38,14 +38,14 @@ const STARTERS: Array<{ q: string; product?: string }> = [
 ];
 
 /**
- * What Nibo is doing, and what it says it is doing.
+ * What Nimbo is doing, and what it says it is doing.
  *
  * One character, in one place, reporting the single thing in flight — rather than
  * an avatar beside every answer, which by the fifth turn is wallpaper. Idle is a
  * real state here and needs a line of its own, so the bar never sits blank.
  */
 /**
- * What Nibo says between questions.
+ * What Nimbo says between questions.
  *
  * The "did you know" lines are about the tool rather than about the products.
  * Facts about the corpus would have to be written here by hand and would quietly
@@ -71,7 +71,7 @@ const IDLE_LINES = [
 function activity(
   turns: Turn[],
   idleLine: string,
-): { state: NiboState; line: string } {
+): { state: NimboState; line: string } {
   const live = turns.at(-1);
   if (!live?.streaming) return { state: "idle", line: idleLine };
 
@@ -111,6 +111,7 @@ export function Chat({ products }: { products: string[] }) {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [idleLine, setIdleLine] = useState(IDLE_LINES[0]);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   useEffect(() => {
     if (busy) return;
@@ -119,6 +120,36 @@ export function Chat({ products }: { products: string[] }) {
     const timer = setInterval(pick, 9000);
     return () => clearInterval(timer);
   }, [busy]);
+
+  /**
+   * Grow the field to fit what is in it, then stop and scroll.
+   *
+   * The ceiling is lines rather than pixels, and smaller on a phone: twelve lines
+   * is a comfortable paragraph on a desktop and most of the screen on a handset,
+   * where the thing being pushed off the top is the answer you are asking about.
+   */
+  const autosize = useCallback(() => {
+    const el = composerRef.current;
+    if (!el) return;
+
+    const style = getComputedStyle(el);
+    const line = parseFloat(style.lineHeight) || 22;
+    const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+    const maxLines = window.matchMedia("(max-width: 680px)").matches ? 5 : 12;
+
+    el.style.height = "auto";
+    const height = Math.min(el.scrollHeight, Math.round(line * maxLines + padding));
+    el.style.height = `${height}px`;
+    el.style.overflowY = el.scrollHeight > height ? "auto" : "hidden";
+  }, []);
+
+  useEffect(autosize, [draft, autosize]);
+
+  // Crossing the breakpoint changes the ceiling, so the field is re-measured.
+  useEffect(() => {
+    window.addEventListener("resize", autosize);
+    return () => window.removeEventListener("resize", autosize);
+  }, [autosize]);
 
   const transcriptRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -371,9 +402,9 @@ export function Chat({ products }: { products: string[] }) {
     <div className="app">
       <header className="topbar">
         <div className="titles">
-          <Nibo size={42} glass />
+          <Nimbo size={42} glass />
           <div>
-            <h1>Nibo</h1>
+            <h1>Nimbo</h1>
             <p>NimbusStack Product Assistant</p>
           </div>
         </div>
@@ -394,11 +425,9 @@ export function Chat({ products }: { products: string[] }) {
           </button>
         ) : null}
 
-        <SessionPanel
-          usage={sessionUsage}
-          context={context}
-          contextWindow={selected?.contextWindow ?? 0}
-          rows={sessionRows}
+        <SessionMenu
+          empty={!sessionRows.length}
+          onDetails={() => setDetailsOpen(true)}
           onExport={exportSession}
         />
       </header>
@@ -408,7 +437,7 @@ export function Chat({ products }: { products: string[] }) {
           <div className="empty">
             <div className="greeting">
               <h2>
-                Hi! I&rsquo;m Nibo — the NimbusStack product assistant. Ask me anything and
+                Hi! I&rsquo;m Nimbo — the NimbusStack product assistant. Ask me anything and
                 I&rsquo;ll look it up in the knowledge base and give you the best answer I can
                 find. I&rsquo;m honest and straightforward, and I&rsquo;ll never make up an
                 answer.
@@ -530,10 +559,12 @@ export function Chat({ products }: { products: string[] }) {
         })}
       </div>
 
-      <div className="nibo-perch">
-        <Nibo state={live.state} size={46} />
-        <span className="nibo-says">{live.line}</span>
-      </div>
+      {busy || !draft.trim() ? (
+        <div className="nimbo-perch">
+          <Nimbo state={live.state} size={38} />
+          <span className="nimbo-says">{live.line}</span>
+        </div>
+      ) : null}
 
 
       <form
@@ -557,20 +588,38 @@ export function Chat({ products }: { products: string[] }) {
               }
             }}
           />
+        </div>
 
-          <div className="composer-foot">
-            <ModelPicker
-              models={models}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-              disabled={busy}
-            />
-            <button type="submit" className="send" disabled={busy || !draft.trim()}>
-              {busy ? "Answering" : "Ask"}
-            </button>
-          </div>
+        {/* Out of the text field, which is now only a text field. */}
+        <div className="composer-tools">
+          <ModelPicker
+            models={models}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            disabled={busy}
+          />
+          <SessionChip
+            usage={sessionUsage}
+            context={context}
+            contextWindow={selected?.contextWindow ?? 0}
+            onOpen={() => setDetailsOpen(true)}
+          />
+          <button type="submit" className="send" disabled={busy || !draft.trim()}>
+            {busy ? "Answering" : "Send"}
+          </button>
         </div>
       </form>
+
+      {detailsOpen ? (
+        <SessionDialog
+          usage={sessionUsage}
+          context={context}
+          contextWindow={selected?.contextWindow ?? 0}
+          rows={sessionRows}
+          onExport={exportSession}
+          onClose={() => setDetailsOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 /**
- * Nibo, the assistant's face.
+ * Nimbo, the assistant's face.
  *
  * A cumulus cloud, because the products are Nimbus and the company is
  * NimbusStack — the character comes out of the subject matter rather than being
@@ -18,17 +18,17 @@
  * the same thing in words, which is why this carries aria-hidden: a screen reader
  * should hear the sentence once, not twice.
  */
-export type NiboState = "idle" | "thinking" | "searching" | "answering";
+export type NimboState = "idle" | "thinking" | "searching" | "answering";
 
-interface NiboProps {
-  state?: NiboState;
+interface NimboProps {
+  state?: NimboState;
   /** Rendered width in px. The drawing keeps a 5:4 ratio. */
   size?: number;
   className?: string;
   /**
    * Hold the magnifying glass permanently, without the sweep.
    *
-   * For the header, where Nibo is a mark rather than a status: a cloud that reads
+   * For the header, where Nimbo is a mark rather than a status: a cloud that reads
    * the documents is what this application is, and the glass says that at a glance.
    * Everywhere else the glass appears only while passages are genuinely being read,
    * and this prop does not animate, so the two never get confused.
@@ -56,32 +56,32 @@ function CloudShape() {
   );
 }
 
-export function Nibo({ state = "idle", size = 56, className = "", glass = false }: NiboProps) {
+export function Nimbo({ state = "idle", size = 56, className = "", glass = false }: NimboProps) {
   return (
     <svg
-      className={`nibo nibo-${state}${glass ? " nibo-holding" : ""} ${className}`.trim()}
+      className={`nimbo nimbo-${state}${glass ? " nimbo-holding" : ""} ${className}`.trim()}
       viewBox="0 0 100 80"
       width={size}
       height={size * 0.8}
       aria-hidden="true"
       focusable="false"
     >
-      <g className="nibo-body">
-        <g className="nibo-edge">
+      <g className="nimbo-body">
+        <g className="nimbo-edge">
           <CloudShape />
         </g>
-        <g className="nibo-fill">
+        <g className="nimbo-fill">
           <CloudShape />
         </g>
         {/* Set wide and low, which is what reads as friendly rather than watchful. */}
-        <g className="nibo-eyes">
+        <g className="nimbo-eyes">
           <circle cx="44" cy="40" r="4.2" />
           <circle cx="62" cy="40" r="4.2" />
         </g>
       </g>
 
       {/* Resolving a reference: attention drifts upward, the way it does. */}
-      <g className="nibo-thought">
+      <g className="nimbo-thought">
         <circle cx="80" cy="16" r="2.2" />
         <circle cx="87" cy="9" r="3" />
         <circle cx="94" cy="3" r="3.6" />
@@ -89,7 +89,7 @@ export function Nibo({ state = "idle", size = 56, className = "", glass = false 
 
       {/* Reading the passages. Teal is the colour this interface already uses for
           cited evidence, so the glass is the same colour as what it is looking for. */}
-      <g className="nibo-glass">
+      <g className="nimbo-glass">
         <circle cx="74" cy="62" r="10" />
         <line x1="81" y1="69" x2="90" y2="78" />
       </g>

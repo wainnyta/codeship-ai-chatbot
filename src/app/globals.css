@@ -89,7 +89,7 @@ input {
 }
 
 /*
- * The bar carries the assistant's identity: Nibo, then what Nibo is. Everything in
+ * The bar carries the assistant's identity: Nimbo, then what Nimbo is. Everything in
  * it sits on one centre line, so the avatar, the name and the button read as a
  * single row rather than three things that happen to be at the top.
  *
@@ -116,7 +116,7 @@ input {
   min-width: 0;
 }
 
-.titles .nibo {
+.titles .nimbo {
   flex: none;
 }
 
@@ -696,7 +696,7 @@ input {
 }
 
 /*
- * No avatar here. Nibo introduces itself in the first three words, directly below
+ * No avatar here. Nimbo introduces itself in the first three words, directly below
  * the header where its face already is, and a third copy on one screen was the
  * thing that made the whole page feel like a sticker sheet.
  */
@@ -772,13 +772,15 @@ input {
   border-top: 1px solid var(--rule);
 }
 
-/* Input and its controls share one bordered box, so the model you are about to
-   use sits with the question you are about to ask rather than in a distant corner. */
+/*
+ * The field is only a field. Its controls used to share the same bordered box,
+ * which made the box a panel rather than an input: the model picker sat where the
+ * text was going to go, and the box grew and shrank around two different things.
+ */
 .composer-box {
   border: 1px solid var(--rule);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--surface);
-  padding: 4px 4px 4px 0;
 }
 
 .composer-box:focus-within {
@@ -791,22 +793,23 @@ input {
   resize: none;
   background: none;
   border: none;
-  padding: 10px 12px 6px;
+  padding: 11px 13px;
   font-family: var(--serif);
   font-size: 15.5px;
-  line-height: 1.45;
-  max-height: 170px;
+  line-height: 1.5;
+  /* Height is set in script, line by line, with a ceiling that differs by screen. */
+  overflow-y: hidden;
 }
 
 .composer textarea:focus {
   outline: none;
 }
 
-.composer-foot {
+.composer-tools {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 2px 4px 2px 12px;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .send {
@@ -859,8 +862,46 @@ input {
     max-width: 88%;
   }
 
-  .meter {
-    margin-left: 0;
+  /*
+   * On a handset the character was a third of the space above the composer. It
+   * keeps its line and loses its bulk — and the line wraps rather than pushing
+   * the controls off the right edge.
+   */
+  .nimbo-perch {
+    gap: 8px;
+    padding: 6px 16px 0;
+  }
+
+  .nimbo-perch .nimbo {
+    width: 26px;
+    height: 21px;
+  }
+
+  .nimbo-says {
+    font-size: 11.5px;
+    line-height: 1.35;
+  }
+
+  /* Three controls on one row on a narrow screen: the picker gives up its width
+     first, because the model's name truncates legibly and a price does not. */
+  .composer-tools {
+    gap: 6px;
+  }
+
+  .picker {
+    min-width: 0;
+  }
+
+  .picker-button {
+    max-width: 44vw;
+  }
+
+  .dialog {
+    padding: 14px 15px 13px;
+  }
+
+  .ledger-q {
+    max-width: 150px;
   }
 }
 
@@ -930,20 +971,20 @@ input {
 
 
 /* ───────────────────────────────────────────────────────────────────────────
- * Nibo
+ * Nimbo
  *
  * The character reports which stage a request is in, so its motion is tied to
  * work actually happening rather than running for atmosphere. Idle is a slow
  * float and nothing else; the busy states each add one gesture and no more.
  * ─────────────────────────────────────────────────────────────────────────── */
 
-.nibo {
+.nimbo {
   display: block;
   overflow: visible;
 }
 
 /* Pass one: the union's outline, drawn wide in the edge colour. */
-.nibo-edge {
+.nimbo-edge {
   fill: #c3ccd8;
   stroke: #c3ccd8;
   stroke-width: 5;
@@ -951,54 +992,54 @@ input {
 }
 
 /* Pass two: the same shapes filled on top, leaving the outline showing. */
-.nibo-fill {
+.nimbo-fill {
   fill: var(--surface);
 }
 
-.nibo-eyes circle {
+.nimbo-eyes circle {
   fill: var(--ink);
 }
 
-.nibo-thought circle,
-.nibo-glass circle,
-.nibo-glass line {
+.nimbo-thought circle,
+.nimbo-glass circle,
+.nimbo-glass line {
   opacity: 0;
 }
 
-.nibo-thought circle {
+.nimbo-thought circle {
   fill: var(--slate);
 }
 
-.nibo-glass circle {
+.nimbo-glass circle {
   fill: none;
   stroke: var(--cite);
   stroke-width: 4;
 }
 
-.nibo-glass line {
+.nimbo-glass line {
   stroke: var(--cite);
   stroke-width: 4.5;
   stroke-linecap: round;
 }
 
 /* Idle: a slow float, and a blink rare enough to be noticed only in passing. */
-.nibo-body {
-  animation: nibo-float 4.5s ease-in-out infinite;
+.nimbo-body {
+  animation: nimbo-float 4.5s ease-in-out infinite;
   transform-origin: 50% 60%;
 }
 
-.nibo-eyes {
-  animation: nibo-blink 6.5s ease-in-out infinite;
+.nimbo-eyes {
+  animation: nimbo-blink 6.5s ease-in-out infinite;
   transform-origin: 50% 38px;
 }
 
-@keyframes nibo-float {
+@keyframes nimbo-float {
   50% {
     transform: translateY(-3px);
   }
 }
 
-@keyframes nibo-blink {
+@keyframes nimbo-blink {
   0%, 92%, 100% {
     transform: scaleY(1);
   }
@@ -1008,24 +1049,24 @@ input {
 }
 
 /* Thinking: the thought rises and the eyes go up with it. */
-.nibo-thinking .nibo-thought circle {
-  animation: nibo-rise 2.1s ease-out infinite;
+.nimbo-thinking .nimbo-thought circle {
+  animation: nimbo-rise 2.1s ease-out infinite;
 }
 
-.nibo-thinking .nibo-thought circle:nth-child(2) {
+.nimbo-thinking .nimbo-thought circle:nth-child(2) {
   animation-delay: 0.22s;
 }
 
-.nibo-thinking .nibo-thought circle:nth-child(3) {
+.nimbo-thinking .nimbo-thought circle:nth-child(3) {
   animation-delay: 0.44s;
 }
 
-.nibo-thinking .nibo-eyes {
+.nimbo-thinking .nimbo-eyes {
   animation: none;
   transform: translateY(-2.5px);
 }
 
-@keyframes nibo-rise {
+@keyframes nimbo-rise {
   0% {
     opacity: 0;
     transform: translate(-4px, 6px) scale(0.5);
@@ -1041,21 +1082,21 @@ input {
 }
 
 /* Searching: the glass sweeps across the passages, and the eyes follow it. */
-.nibo-searching .nibo-glass circle,
-.nibo-searching .nibo-glass line {
+.nimbo-searching .nimbo-glass circle,
+.nimbo-searching .nimbo-glass line {
   opacity: 1;
-  animation: nibo-sweep 2.4s ease-in-out infinite;
+  animation: nimbo-sweep 2.4s ease-in-out infinite;
 }
 
-.nibo-searching .nibo-eyes {
-  animation: nibo-follow 2.4s ease-in-out infinite;
+.nimbo-searching .nimbo-eyes {
+  animation: nimbo-follow 2.4s ease-in-out infinite;
 }
 
-.nibo-searching .nibo-body {
+.nimbo-searching .nimbo-body {
   animation-duration: 2.4s;
 }
 
-@keyframes nibo-sweep {
+@keyframes nimbo-sweep {
   0%, 100% {
     transform: translate(-26px, 2px) rotate(-12deg);
   }
@@ -1064,7 +1105,7 @@ input {
   }
 }
 
-@keyframes nibo-follow {
+@keyframes nimbo-follow {
   0%, 100% {
     transform: translateX(-2.5px);
   }
@@ -1074,28 +1115,28 @@ input {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .nibo-body,
-  .nibo-eyes,
-  .nibo-thought circle,
-  .nibo-glass circle,
-  .nibo-glass line {
+  .nimbo-body,
+  .nimbo-eyes,
+  .nimbo-thought circle,
+  .nimbo-glass circle,
+  .nimbo-glass line {
     animation: none !important;
   }
 
   /* The gesture still has to be legible without the motion that carries it. */
-  .nibo-searching .nibo-glass circle,
-  .nibo-searching .nibo-glass line {
+  .nimbo-searching .nimbo-glass circle,
+  .nimbo-searching .nimbo-glass line {
     opacity: 1;
     transform: translate(-10px, -1px) rotate(-4deg);
   }
 
-  .nibo-thinking .nibo-thought circle {
+  .nimbo-thinking .nimbo-thought circle {
     opacity: 1;
   }
 }
 
 /*
- * Nibo perches on the session strip rather than sitting inside it.
+ * Nimbo perches on the session strip rather than sitting inside it.
  *
  * Given its own bar, the character became another row of chrome — a third
  * horizontal band stacked above the numbers and the composer. Hanging it over the
@@ -1107,28 +1148,28 @@ input {
  * on its way back to the input, which is exactly when someone wants to know
  * whether anything is still happening.
  */
-.nibo-perch {
+.nimbo-perch {
   display: flex;
   align-items: center;
-  gap: 13px;
-  padding: 12px 24px 14px;
+  gap: 11px;
+  padding: 8px 24px 2px;
   pointer-events: none;
 }
 
-.nibo-perch .nibo {
+.nimbo-perch .nimbo {
   flex: none;
   filter: drop-shadow(0 1px 2px rgba(21, 29, 42, 0.08));
 }
 
-.nibo-says {
+.nimbo-says {
   font-family: var(--sans);
   font-size: 12.5px;
   color: var(--slate);
   /* The idle lines rotate; fading the swap stops it reading as a glitch. */
-  animation: nibo-say 400ms ease-out;
+  animation: nimbo-say 400ms ease-out;
 }
 
-@keyframes nibo-say {
+@keyframes nimbo-say {
   from {
     opacity: 0;
     transform: translateY(2px);
@@ -1136,35 +1177,35 @@ input {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .nibo-says {
+  .nimbo-says {
     animation: none;
   }
 }
 
 /* Held, not sweeping: the header mark rather than the searching gesture. */
-.nibo-holding .nibo-glass circle,
-.nibo-holding .nibo-glass line {
+.nimbo-holding .nimbo-glass circle,
+.nimbo-holding .nimbo-glass line {
   opacity: 1;
   animation: none;
   transform: translate(-3px, -2px) rotate(-5deg);
 }
 
-/* Nibo as the header mark, on the dark bar. */
-.topbar .nibo-edge {
+/* Nimbo as the header mark, on the dark bar. */
+.topbar .nimbo-edge {
   fill: var(--bar-ink);
   stroke: var(--bar-ink);
 }
 
-.topbar .nibo-fill {
+.topbar .nimbo-fill {
   fill: var(--bar-ink);
 }
 
-.topbar .nibo-eyes circle {
+.topbar .nimbo-eyes circle {
   fill: var(--bar);
 }
 
-.topbar .nibo-glass circle,
-.topbar .nibo-glass line {
+.topbar .nimbo-glass circle,
+.topbar .nimbo-glass line {
   stroke: var(--bar-glass);
 }
 
@@ -1172,13 +1213,13 @@ input {
 
 .ring-track {
   fill: none;
-  stroke: var(--bar-edge);
+  stroke: var(--rule);
   stroke-width: 2.5;
 }
 
 .ring-fill {
   fill: none;
-  stroke: var(--bar-ink-dim);
+  stroke: var(--slate);
   stroke-width: 2.5;
   stroke-linecap: round;
   transition: stroke-dasharray 400ms ease;
@@ -1198,21 +1239,21 @@ input {
   display: flex;
   align-items: center;
   gap: 7px;
-  background: transparent;
-  border: 1px solid var(--bar-edge);
+  background: var(--surface);
+  border: 1px solid var(--rule);
   border-radius: 6px;
   padding: 6px 10px;
   cursor: pointer;
-  color: var(--bar-ink-dim);
+  color: var(--slate);
   font-family: var(--mono);
   font-size: 11.5px;
-  transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+  white-space: nowrap;
+  transition: border-color 120ms ease, color 120ms ease;
 }
 
 .usage-chip:hover {
-  border-color: rgba(241, 247, 245, 0.45);
-  background: rgba(241, 247, 245, 0.07);
-  color: var(--bar-ink);
+  border-color: var(--slate);
+  color: var(--ink);
 }
 
 .menu {
@@ -1228,7 +1269,7 @@ input {
   border: 1px solid transparent;
   border-radius: 6px;
   cursor: pointer;
-  color: var(--bar-ink-dim);
+  color: var(--slate);
   transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
 }
 
@@ -1237,6 +1278,17 @@ input {
 }
 
 .icon-button:hover {
+  border-color: var(--rule);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+/* The one that stayed on the dark bar. */
+.topbar .icon-button {
+  color: var(--bar-ink-dim);
+}
+
+.topbar .icon-button:hover {
   border-color: var(--bar-edge);
   background: rgba(241, 247, 245, 0.07);
   color: var(--bar-ink);

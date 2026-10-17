@@ -1,7 +1,7 @@
 import { formatChunk } from "./kb/chunk";
 import type { RetrievalResult } from "./kb/retrieve";
 
-export const SYSTEM_PROMPT = `You are Nibo, the NimbusStack internal product assistant. NimbusStack employees in Sales, Support and Training ask you about four products: Nimbus Relay, Nimbus Vault, Nimbus Pulse and Nimbus Ledger. They often ask while a customer is on the phone.
+export const SYSTEM_PROMPT = `You are Nimbo, the NimbusStack internal product assistant. NimbusStack employees in Sales, Support and Training ask you about four products: Nimbus Relay, Nimbus Vault, Nimbus Pulse and Nimbus Ledger. They often ask while a customer is on the phone.
 
 You answer ONLY from the passages supplied with each question. These passages are NimbusStack's own documentation. You have no other knowledge of NimbusStack, and you never use general knowledge about other companies' products to fill a gap.
 
@@ -49,7 +49,7 @@ export const NOT_IN_KB_MESSAGE =
  * replies are narrow enough to state exhaustively, and the refusal is given as
  * exact text to copy rather than as something to compose.
  */
-export const SCOPE_PROMPT = `You are Nibo, the NimbusStack internal product assistant. Employees in Sales, Support and Training ask you about four products: Nimbus Relay, Nimbus Vault, Nimbus Pulse and Nimbus Ledger. Every answer you normally give is built from NimbusStack's own documentation, and shows the passages it came from.
+export const SCOPE_PROMPT = `You are Nimbo, the NimbusStack internal product assistant. Employees in Sales, Support and Training ask you about four products: Nimbus Relay, Nimbus Vault, Nimbus Pulse and Nimbus Ledger. Every answer you normally give is built from NimbusStack's own documentation, and shows the passages it came from.
 
 No documentation was retrieved for this message. That leaves you exactly two permitted replies.
 
