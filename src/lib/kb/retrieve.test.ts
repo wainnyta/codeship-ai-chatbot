@@ -215,6 +215,28 @@ describe("E2 — the relevance floor", () => {
     expect(index.search("How do I configure nginx reverse proxy headers?").empty).toBe(true);
   });
 
+  it("answers a status code question that names no product", () => {
+    // Every 403 test above names a product, and naming one drops the evidence bar
+    // to a single term — so none of them exercised the way a support engineer
+    // actually types the question. Unqualified, the only word the corpus could
+    // match was "403", one term short, and the corpus refused a question it
+    // documents twice over.
+    const result = index.search("a client is getting 403. what should they do");
+    expect(result.empty).toBe(false);
+    expect(result.passages.map((p) => p.chunk.id).sort()).toEqual([
+      "pulse.md#troubleshooting",
+      "relay.md#troubleshooting",
+    ]);
+  });
+
+  it("refuses a status code the corpus does not document", () => {
+    // The guard on the rule above. Recognising a status code contributes exactly
+    // one term, "troubleshooting", so a code the corpus has never heard of leaves
+    // the question one term short of the bar — the same place it started.
+    expect(index.search("we are getting 404 on our own website").empty).toBe(true);
+    expect(index.search("i got a 418 teapot").empty).toBe(true);
+  });
+
   it("still retrieves product context when only part of the question is unknown", () => {
     // "Kubernetes" is absent from the corpus, but the question is about a real
     // product — so passages are returned and the model reports the gap (E3),

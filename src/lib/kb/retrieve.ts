@@ -61,6 +61,19 @@ const PHRASE_SYNONYMS: Array<[RegExp, string[]]> = [
   [/\bsecret|credential|certificate\b/i, ["secrets", "credentials"]],
   [/\baudit\b/i, ["audit", "log", "retention"]],
   [/\brate limit|throttl|429\b/i, ["rate", "limit", "429"]],
+  // An HTTP status code is how a support question is actually phrased. Nobody
+  // writes "the request was refused on authorization grounds"; they paste the
+  // number out of the ticket. Every code this corpus documents sits under a
+  // heading called "Troubleshooting", so the number is the user's vocabulary and
+  // "troubleshooting" is the document's, and carrying one to the other is the only
+  // thing this table does. It already did it for 429, by hand, one code at a time.
+  //
+  // The expansion is a single term, deliberately. The evidence bar below wants two
+  // meaningful terms on one passage, so this cannot carry a question by itself —
+  // the code has to appear in that same passage. Ask about a code the corpus does
+  // not document, 404 say, and the only match is "troubleshooting", which is one
+  // term, which is still a refusal.
+  [/\b[45]\d\d\b/, ["troubleshooting"]],
   // "What products do we have?" is a fair question about this corpus, and one the
   // corpus can answer — but it shares almost no vocabulary with any document, so
   // the relevance floor used to refuse it while the refusal text itself listed the
