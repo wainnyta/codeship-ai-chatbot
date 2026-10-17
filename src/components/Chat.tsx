@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Answer } from "./Answer";
 import { ModelPicker } from "./ModelPicker";
 import { Nibo, type NiboState } from "./Nibo";
+import { SessionPanel, type SessionRow } from "./SessionPanel";
 import { Sources } from "./Sources";
 import type { PublicModel } from "@/lib/config";
 import type { AnsweringModel, PassageView, RewriteView, StreamEvent } from "@/lib/providers/types";
@@ -291,6 +292,16 @@ export function Chat({ products }: { products: string[] }) {
   const context = contextStatus(contextTokens, selected?.contextWindow ?? 0);
   const live = activity(turns, idleLine);
 
+  const sessionRows: SessionRow[] = turns
+    .filter((t) => t.usage)
+    .map((t) => ({
+      id: t.id,
+      question: t.question,
+      model: t.model?.label ?? "none",
+      usage: t.usage!,
+      rewrite: t.rewrite?.usage ?? null,
+    }));
+
   const exportSession = (format: "csv" | "json") => {
     const rows = turns
       .filter((t) => t.usage)
@@ -367,14 +378,29 @@ export function Chat({ products }: { products: string[] }) {
           </div>
         </div>
 
-        <button
-          type="button"
-          className="ghost-button"
-          onClick={() => setTurns([])}
-          disabled={busy || !turns.length}
-        >
-          New conversation
-        </button>
+        {/*
+          * Absent rather than disabled when there is nothing to clear. A greyed
+          * control on an empty screen reads as broken, and this one is unusable
+          * for precisely as long as the screen it sits above is empty.
+          */}
+        {turns.length ? (
+          <button
+            type="button"
+            className="ghost-button"
+            onClick={() => setTurns([])}
+            disabled={busy}
+          >
+            + New
+          </button>
+        ) : null}
+
+        <SessionPanel
+          usage={sessionUsage}
+          context={context}
+          contextWindow={selected?.contextWindow ?? 0}
+          rows={sessionRows}
+          onExport={exportSession}
+        />
       </header>
 
       <div className="transcript" ref={transcriptRef}>
@@ -509,35 +535,6 @@ export function Chat({ products }: { products: string[] }) {
         <span className="nibo-says">{live.line}</span>
       </div>
 
-      <div className="usage">
-        <span>
-          session <b>{sessionUsage.inputTokens.toLocaleString()}</b> in /{" "}
-          <b>{sessionUsage.outputTokens.toLocaleString()}</b> out
-        </span>
-        <span>
-          <b>
-            {formatCost(sessionUsage.costUsd)}
-            {sessionUsage.estimated ? "*" : ""}
-          </b>
-          {sessionUsage.estimated ? " includes an estimate" : ""}
-        </span>
-
-        <div className="export">
-          <button type="button" onClick={() => exportSession("csv")} disabled={!sessionUsage.inputTokens}>
-            CSV
-          </button>
-          <button type="button" onClick={() => exportSession("json")} disabled={!sessionUsage.inputTokens}>
-            JSON
-          </button>
-        </div>
-
-        <div className={`meter ${context.level === "ok" ? "" : context.level}`}>
-          <span>context {context.percent.toFixed(context.percent < 1 ? 2 : 0)}%</span>
-          <div className="meter-track">
-            <div className="meter-fill" style={{ width: `${Math.min(context.percent, 100)}%` }} />
-          </div>
-        </div>
-      </div>
 
       <form
         className="composer"

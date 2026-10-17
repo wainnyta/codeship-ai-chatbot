@@ -143,6 +143,8 @@ Every reply reports which model actually answered, and says so explicitly when t
 
 ### Usage and cost
 
+Per-message numbers sit under each answer. Everything about the session lives in the app bar: a chip showing the running cost, and behind it a dialog with the totals, a per-question ledger and the exports. That used to be a strip across the bottom of the page — two totals, two export buttons, a labelled percentage and a progress bar — which spent a permanent row of chrome above the composer on figures that are glanced at rather than read. The running total stays on screen because R4 asks for it after every message; the breakdown moved to where someone goes when they actually want it.
+
 Per message: input tokens, output tokens, and cost computed from the config prices, with session running totals and CSV/JSON export.
 
 Three different "ran out of tokens" situations are handled separately:
@@ -155,7 +157,7 @@ Three different "ran out of tokens" situations are handled separately:
 
 A dropped message would understate session spend and a guess presented as fact would be dishonest; visibly approximate is the third option.
 
-The context meter warns at 75% (amber) and 90% (red), and recomputes the moment you switch models, since the window comes from config. In practice **these thresholds will not be reached by conversation** — the models here have context windows around a million tokens and the whole corpus is 15KB. The meter is correct and tested, but it is proved by unit tests rather than by using the app.
+Context is a ring in the app bar rather than a labelled bar across the footer: it fills as the window does, turns amber at 75% and rust at 90%, and recomputes the moment you switch models, since the window comes from config. The exact figure is in its tooltip and in the session dialog — the ring is for the glance, not the reading. In practice **these thresholds will not be reached by conversation** — the models here have context windows around a million tokens and the whole corpus is 15KB. The meter is correct and tested, but it is proved by unit tests rather than by using the app.
 
 ---
 
