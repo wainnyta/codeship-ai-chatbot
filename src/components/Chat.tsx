@@ -680,7 +680,7 @@ export function Chat({ products }: { products: string[] }) {
             ref={composerRef}
             rows={1}
             value={draft}
-            placeholder="Ask about pricing, integrations, SLAs, releases or troubleshooting…"
+            placeholder="Ask Nimbo"
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
