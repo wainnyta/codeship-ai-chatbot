@@ -93,11 +93,17 @@ The resolved query is shown above the sources, and the call is billed separately
 
 The honest cost: a follow-up waits ~2.5s longer before its first token, and the UI says what it is doing during that wait.
 
-### Nibo
+### Nimbo
 
 The assistant has a face: a small cumulus cloud, because the products are Nimbus and the company is NimbusStack. It introduces itself by name on the opening screen and in its own replies, so the page and the model agree about who is talking. In the app bar it holds a magnifying glass and does not move — there it is a mark rather than a status, and a cloud that reads documents is what this application is.
 
-Nibo sits between the conversation and the composer, on the page rather than inside a bar of its own, which is where the eye passes on its way back to the input and so exactly where someone wants to know whether anything is still happening. An avatar beside every answer was tried first and was the same drawing five times down a page — the one thing a status indicator must not be is scenery. Idle is a real state there, so it carries a rotating line rather than sitting blank — some of them "did you know" notes about the application itself. They are about the tool and never about the products, because facts about the corpus would be written by hand and would go stale the first time a document changed, which is the trap the hard-coded product roster was. Its states are a status indicator rather than decoration. Each corresponds to a stage the request is genuinely in — resolving a follow-up into a standalone question, or reading the passages that came back — so the animation cannot drift out of sync with what the server is doing. There is deliberately no "writing the answer" state: the answer is streaming word by word at that point, and a second indicator saying so would be noise. Motion is suppressed under `prefers-reduced-motion`, where the gesture still renders statically so it stays legible without it.
+**Its states report real work.** Each corresponds to a stage the request is genuinely in — resolving a follow-up into a standalone query, reading the passages that came back, writing the reply — so the animation cannot drift out of sync with what the server is doing. Motion is suppressed under `prefers-reduced-motion`, where the gesture still renders statically so it stays legible without it.
+
+**It lives in one place**, between the conversation and the composer, which is where the eye passes on its way back to the input and so exactly where someone wants to know whether anything is still happening. An avatar beside every answer was tried first and was the same drawing five times down a page; the one thing a status indicator must not be is scenery.
+
+**It disappears while there is a draft in the box.** It reports work, and while someone is typing there is none — an idle line then only competes with the sentence being written. It returns the moment the question is sent, which is when it has something true to say.
+
+Idle is a real state in a permanent position, so it carries a rotating line rather than sitting blank, some of them "did you know" notes. Those are about the application and never about the products: facts about the corpus would be written by hand here and would go stale the first time a document changed, which is the trap the hard-coded product roster was.
 
 The greeting on the opening screen makes a promise about never inventing an answer. That is product copy the team writes, and it is separate from the rule the model runs under, which forbids it from vouching for its own accuracy at runtime — the architecture is what keeps the promise, not the model's opinion of itself.
 
