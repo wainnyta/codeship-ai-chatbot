@@ -417,7 +417,7 @@ export function Chat({ products }: { products: string[] }) {
         {turns.length ? (
           <button
             type="button"
-            className="ghost-button"
+            className="new-button"
             onClick={() => setTurns([])}
             disabled={busy}
           >

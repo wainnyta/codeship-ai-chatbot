@@ -140,24 +140,31 @@ input {
   line-height: 1.2;
 }
 
-.ghost-button {
-  background: transparent;
-  border: 1px solid var(--bar-edge);
+/*
+ * Solid, not ghosted. Starting a fresh conversation is the only action in the bar
+ * and it was outlined in a 20%-opacity white that read as disabled — the same way
+ * it genuinely did read when it was disabled rather than hidden. The one button
+ * here should look like a button.
+ */
+.new-button {
+  background: var(--bar-ink);
+  border: 1px solid var(--bar-ink);
   border-radius: 6px;
   padding: 7px 13px;
   cursor: pointer;
-  color: var(--bar-ink-dim);
-  transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+  color: var(--bar);
+  font-weight: 500;
+  font-size: 13px;
+  transition: background 120ms ease, border-color 120ms ease;
 }
 
-.ghost-button:hover:not(:disabled) {
-  border-color: rgba(241, 247, 245, 0.45);
-  background: rgba(241, 247, 245, 0.07);
-  color: var(--bar-ink);
+.new-button:hover:not(:disabled) {
+  background: #fff;
+  border-color: #fff;
 }
 
-.ghost-button:disabled {
-  opacity: 0.45;
+.new-button:disabled {
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
