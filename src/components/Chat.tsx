@@ -523,35 +523,54 @@ export function Chat({ products }: { products: string[] }) {
               />
 
               {turn.model || turn.usage ? (
-                <div className="answer-meta">
-                  {turn.model ? (
-                    <span className="answered-by">
-                      answered by {turn.model.label}
-                      {turn.model.fallback ? (
-                        <span className="badge"> fallback from {turn.model.selectedId}</span>
-                      ) : null}
-                    </span>
-                  ) : null}
-                  {turn.usage ? (
-                    <>
+                /*
+                 * One line by default, the breakdown behind it. This was three
+                 * lines of mono under every answer — who answered, the token
+                 * split, the cost, and the cost of resolving the follow-up — which
+                 * is more accounting than prose on a short reply. The model and the
+                 * cost stay visible, because R4 asks for them per message; the
+                 * split and the resolving call are detail, and detail folds away.
+                 */
+                <details className="answer-meta">
+                  <summary>
+                    {turn.model ? (
+                      <span className="answered-by">
+                        {turn.model.label}
+                        {turn.model.fallback ? (
+                          <span className="badge">fallback from {turn.model.selectedId}</span>
+                        ) : null}
+                      </span>
+                    ) : null}
+                    {turn.usage ? (
+                      <>
+                        <span>
+                          {(turn.usage.inputTokens + turn.usage.outputTokens).toLocaleString()} tokens
+                        </span>
+                        <span>
+                          {formatCost(turn.usage.costUsd + (turn.rewrite?.usage.costUsd ?? 0))}
+                          {turn.usage.estimated ? " (estimated)" : ""}
+                        </span>
+                      </>
+                    ) : null}
+                  </summary>
+
+                  <div className="answer-meta-detail">
+                    {turn.usage ? (
                       <span>
                         {turn.usage.inputTokens.toLocaleString()} in /{" "}
-                        {turn.usage.outputTokens.toLocaleString()} out
+                        {turn.usage.outputTokens.toLocaleString()} out ·{" "}
+                        {formatCost(turn.usage.costUsd)} answering
                       </span>
+                    ) : null}
+                    {turn.rewrite ? (
                       <span>
-                        {formatCost(turn.usage.costUsd)}
-                        {turn.usage.estimated ? " (estimated)" : ""}
+                        {turn.rewrite.usage.inputTokens.toLocaleString()} in /{" "}
+                        {turn.rewrite.usage.outputTokens.toLocaleString()} out ·{" "}
+                        {formatCost(turn.rewrite.usage.costUsd)} resolving the question
                       </span>
-                    </>
-                  ) : null}
-                  {turn.rewrite ? (
-                    <span className="rewrite-cost">
-                      + {turn.rewrite.usage.inputTokens.toLocaleString()} in /{" "}
-                      {turn.rewrite.usage.outputTokens.toLocaleString()} out ·{" "}
-                      {formatCost(turn.rewrite.usage.costUsd)} resolving the question
-                    </span>
-                  ) : null}
-                </div>
+                    ) : null}
+                  </div>
+                </details>
               ) : null}
             </div>
           </article>
@@ -588,6 +607,28 @@ export function Chat({ products }: { products: string[] }) {
               }
             }}
           />
+
+          <button
+            type="submit"
+            className="send"
+            disabled={busy || !draft.trim()}
+            aria-label="Send"
+            title="Send"
+          >
+            {/* A paper plane: the gesture is sending, not scrolling up. */}
+            <svg viewBox="0 0 16 16" width="17" height="17" aria-hidden="true" focusable="false">
+              <g
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M14.6 1.4 1.7 6.1l5.2 2.8 2.8 5.2 4.9-12.7Z" />
+                <path d="M14.6 1.4 6.9 8.9" />
+              </g>
+            </svg>
+          </button>
         </div>
 
         {/* Out of the text field, which is now only a text field. */}
@@ -604,9 +645,6 @@ export function Chat({ products }: { products: string[] }) {
             contextWindow={selected?.contextWindow ?? 0}
             onOpen={() => setDetailsOpen(true)}
           />
-          <button type="submit" className="send" disabled={busy || !draft.trim()}>
-            {busy ? "Answering" : "Send"}
-          </button>
         </div>
       </form>
 
