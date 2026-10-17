@@ -156,6 +156,65 @@ describe("E10 — an empty message never reaches a provider", () => {
   });
 });
 
+describe("the context window guard", () => {
+  /**
+   * The one part of the context story that is behaviour rather than arithmetic.
+   * contextStatus() is pure and covered in usage.test.ts; the ring that renders it
+   * only ever reads single-digit percentages in real use, because the smallest
+   * window configured here is a million tokens and the corpus is 2,300. So the
+   * overflow path is the piece no amount of ordinary use will reach — which is
+   * exactly why it needs a test rather than a demonstration.
+   */
+  const overflow = (): ChatMessage[] => [
+    // Four million characters is a shade over a million tokens at four per token,
+    // which is more than any window configured here and therefore overflows all of
+    // them. Sized against the constant rather than a literal, so raising a window
+    // in config cannot silently stop this test exercising the guard.
+    { role: "user", content: "x".repeat(4_200_000) },
+    { role: "assistant", content: "..." },
+    { role: "user", content: "What is Relay's SLA?" },
+  ];
+
+  it("refuses an overlong conversation without calling a provider", async () => {
+    const fake = makeFake({});
+    const { status, events } = await post(overflow(), GPT, fake);
+
+    expect(status).toBe(413);
+    expect(find(events, "error")?.code).toBe("context_too_long");
+    // The cost of the refusal is the point: an oversized prompt rejected by the
+    // provider is billed, and this one never leaves the process.
+    expect(fake.calls).toEqual([]);
+  });
+
+  it("names the model and the way out", async () => {
+    const fake = makeFake({});
+    const { events } = await post(overflow(), CLAUDE, fake);
+
+    const error = find(events, "error");
+    // Which model ran out matters, because switching is one of the two remedies
+    // and the windows differ.
+    expect(error?.message).toContain("Claude Opus 5.5");
+    expect(error?.message).toMatch(/New Conversation/i);
+    expect((error as { modelId?: string })?.modelId).toBe(CLAUDE);
+  });
+
+  it("does not refuse a conversation that still fits", async () => {
+    const fake = makeFake({ [GPT]: { deltas: ["fine"] } });
+    const { status } = await post(
+      [
+        { role: "user", content: "x".repeat(40_000) },
+        { role: "assistant", content: "..." },
+        { role: "user", content: "What is Relay's SLA?" },
+      ],
+      GPT,
+      fake,
+    );
+
+    expect(status).toBe(200);
+    expect(fake.calls).toEqual([GPT]);
+  });
+});
+
 describe("E2 — off-corpus questions get no passages to answer from", () => {
   it("hands the model nothing to cite", async () => {
     const fake = makeFake({});
