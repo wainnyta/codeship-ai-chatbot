@@ -80,7 +80,7 @@ export async function* runChat(options: RunChatOptions): AsyncGenerator<StreamEv
   }
 
   const inputEstimate = promptTokens(prompt, history);
-  let lastError: ProviderError | null = null;
+  const failures: ProviderError[] = [];
 
   for (const model of chain) {
     // Per-attempt state. Reset for each model precisely because an un-latched
@@ -139,7 +139,7 @@ export async function* runChat(options: RunChatOptions): AsyncGenerator<StreamEv
       // A stream that completed without producing any text is a failed attempt, not
       // a successful empty answer — fall through to the next provider.
       if (!latched) {
-        lastError = new ProviderError("unavailable", "That provider returned an empty reply.");
+        failures.push(new ProviderError("unavailable", "That provider returned an empty reply."));
         continue;
       }
 
@@ -160,7 +160,7 @@ export async function* runChat(options: RunChatOptions): AsyncGenerator<StreamEv
       return;
     } catch (error) {
       const classified = classifyError(error);
-      lastError = classified;
+      failures.push(classified);
 
       if (latched) {
         // POST-LATCH. The user has already read text from this model. Do not fall
@@ -185,13 +185,69 @@ export async function* runChat(options: RunChatOptions): AsyncGenerator<StreamEv
         `[provider] ${model.id} failed before output (${classified.code}): ${classified.message}`,
       );
       if (held !== null) held = null;
+      // Nobody is reading any more, so trying the next model spends a provider
+      // call on an answer that cannot be delivered.
+      if (signal?.aborted) break;
       continue;
     }
   }
 
-  yield {
-    type: "error",
-    code: "all_failed",
-    message: `Every configured provider failed. ${lastError?.message ?? ""} Try again shortly.`.trim(),
-  };
+  yield { type: "error", code: "all_failed", message: exhausted(failures) };
+}
+
+/**
+ * What to say once every model in the chain has been tried.
+ *
+ * The messages `classifyError` writes are written for an attempt, and read as
+ * advice because another attempt is usually about to happen: "Another model may
+ * still work" is useful when one is next in line and false once none is. The old
+ * ending pasted one of them between "Every configured provider failed" and "Try
+ * again shortly", which in the case that actually happens — a conversation too
+ * long for every window — reported an outage that was not occurring and gave
+ * three remedies, two of which could not work.
+ *
+ * Nothing failed there. It does not fit, and waiting will not help. So the ending
+ * is named by what the providers agreed on, and recommends waiting only where
+ * waiting is capable of helping.
+ */
+function exhausted(failures: ProviderError[]): string {
+  const first = failures[0];
+
+  // They disagreed, so there is no single story to tell. Say what was tried and
+  // report the last reason verbatim rather than inventing a summary of several.
+  if (!first || !failures.every((f) => f.code === first.code)) {
+    return `Every configured model was tried and none could answer. ${failures.at(-1)?.message ?? ""}`.trim();
+  }
+
+  switch (first.code) {
+    // Every window has now been tried, so "pick a model with a larger one" —
+    // which is the right advice for one model — has stopped being advice at all.
+    case "context_too_long":
+      return "This conversation is too long for every configured model. Start a New Conversation, or ask this as a shorter question.";
+
+    case "rate_limit": {
+      // Any one of them answering is enough, so the soonest a resend can work is
+      // the shortest wait asked for, not the longest. Where no provider said,
+      // say nothing rather than guess a number someone will sit and wait out.
+      const waits = failures
+        .map((f) => f.retryAfterSeconds)
+        .filter((n): n is number => typeof n === "number");
+      return waits.length
+        ? `Every configured provider is rate-limited. The soonest any of them will take another request is about ${Math.min(...waits)} seconds from now.`
+        : "Every configured provider is rate-limited right now. Wait a moment and resend.";
+    }
+
+    // Neither of these is the reader's to fix, and neither improves by waiting,
+    // so they say so instead of suggesting a remedy that belongs to someone else.
+    case "auth":
+      return "No configured provider accepted its API key. The keys on the server need attention — this is not something that can be fixed from here.";
+    case "quota":
+      return "No configured provider has credit left. The provider accounts need attention — this is not something that can be fixed from here.";
+
+    case "unavailable":
+      return "No configured provider could be reached. Try again shortly.";
+
+    default:
+      return `Every configured model was tried and none could answer. ${first.message}`;
+  }
 }

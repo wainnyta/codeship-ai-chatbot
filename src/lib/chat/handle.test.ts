@@ -527,6 +527,86 @@ describe("R3/E8 — fallback and the first-flush latch", () => {
   });
 });
 
+describe("what the chain says once it has tried everything", () => {
+  const everyModelFails = (error: ProviderError) =>
+    makeFake({
+      [GEMINI]: { failBefore: error },
+      [CLAUDE]: { failBefore: error },
+      [GPT]: { failBefore: error },
+    });
+
+  it("does not recommend switching models once every model has been tried", async () => {
+    // The message a single model produces tells you to pick one with a larger
+    // window, which is good advice right up until all of them have been tried and
+    // it becomes an instruction to do something impossible.
+    const fake = everyModelFails(
+      new ProviderError("context_too_long", "This conversation is too long for the selected model."),
+    );
+    const { events } = await post(ask("What does Nimbus Vault cost?"), GEMINI, fake);
+
+    const message = find(events, "error")!.message;
+    expect(message).toMatch(/too long for every configured model/i);
+    expect(message).toMatch(/New Conversation/i);
+    expect(message).not.toMatch(/larger context window|another model|try again/i);
+  });
+
+  it("does not blame the providers for a conversation that is merely too long", async () => {
+    const fake = everyModelFails(new ProviderError("context_too_long", "too long"));
+    const { events } = await post(ask("What does Nimbus Vault cost?"), GEMINI, fake);
+
+    // Nothing failed. It does not fit, and saying otherwise sends the reader to
+    // check a status page over something no status page will explain.
+    expect(find(events, "error")!.message).not.toMatch(/failed|outage|unavailable/i);
+  });
+
+  it("only suggests waiting where waiting can help", async () => {
+    const quota = everyModelFails(new ProviderError("quota", "no credit"));
+    const { events } = await post(ask("What does Nimbus Vault cost?"), GEMINI, quota);
+
+    const message = find(events, "error")!.message;
+    expect(message).toMatch(/credit/i);
+    expect(message).not.toMatch(/try again|wait|shortly/i);
+  });
+
+  it("reports the soonest retry, not the longest, when providers disagree on it", async () => {
+    // Any one of them answering is enough, so 20 seconds is when a resend can
+    // first work — quoting 90 would have the reader wait out a limit that is not
+    // in their way.
+    const fake = makeFake({
+      [GEMINI]: { failBefore: new ProviderError("rate_limit", "limited", 90) },
+      [CLAUDE]: { failBefore: new ProviderError("rate_limit", "limited", 20) },
+      [GPT]: { failBefore: new ProviderError("rate_limit", "limited", 45) },
+    });
+    const { events } = await post(ask("What does Nimbus Vault cost?"), GEMINI, fake);
+
+    const message = find(events, "error")!.message;
+    expect(message).toMatch(/20 seconds/);
+    expect(message).not.toMatch(/90|45/);
+  });
+
+  it("falls back to the last reason when the providers failed differently", async () => {
+    // Three different causes, so there is no shared story and the ending reports
+    // the final attempt's reason verbatim. Which model is final comes from the
+    // configured chain rather than this test's guess at it.
+    const chain = resolveChain(GEMINI);
+    const behaviours: Record<string, Behavior> = {};
+    chain.forEach((model, i) => {
+      behaviours[model.id] = {
+        failBefore: new ProviderError(
+          (["auth", "quota", "unavailable"] as const)[i % 3],
+          i === chain.length - 1 ? "outage in progress" : `reason ${i}`,
+        ),
+      };
+    });
+    const fake = makeFake(behaviours);
+    const { events } = await post(ask("What does Nimbus Vault cost?"), GEMINI, fake);
+
+    const message = find(events, "error")!.message;
+    expect(message).toMatch(/Every configured model was tried/i);
+    expect(message).toContain("outage in progress");
+  });
+});
+
 describe("E9 — a rate-limited provider produces an actionable message", () => {
   it("explains what to do instead of surfacing a stack trace", async () => {
     const rateLimited = Object.assign(new Error("Rate limit reached. retry-after: 30"), {
