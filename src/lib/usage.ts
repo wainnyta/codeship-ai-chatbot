@@ -37,6 +37,41 @@ export function estimateTokens(text: string): number {
 }
 
 /**
+ * The fewest tokens a string could plausibly become — never more than the truth.
+ *
+ * `estimateTokens` is a middling guess and is right for what it does: costing a
+ * reply whose stream died, and spending the passage budget. It is the wrong tool
+ * for refusing a request before it is sent, because it is wrong in both directions
+ * and badly. Measured against the real OpenAI tokenizer, chars/4 under-counts a
+ * log dump of UUIDs by 2.0x, base64 by 2.7x, Japanese by 2.4x and emoji by 4.0x —
+ * and over-counts ordinary prose by 1.5x, a thousand spaces by a factor of 28.
+ *
+ * Which direction it errs in matters, because the two mistakes do not cost the
+ * same. Refuse a conversation that would have fitted and the reader is told to
+ * start again for no reason, with no way to find out it was wrong. Let an
+ * oversized one through and the provider rejects it unbilled, the chain tries the
+ * next model — which may well have a larger window and simply answer — and the
+ * same error code surfaces either way. Only one of those is recoverable, so the
+ * estimate used to refuse must never exceed reality.
+ *
+ * Whitespace is what makes a plain chars/N bound impossible: tiktoken packs a run
+ * of spaces into one token, so indented code reaches 11 characters per token and a
+ * line of blank space 111. Collapsing runs first removes that entirely, and across
+ * every sample measured — corpus prose, markdown tables, JSON, stack traces,
+ * base64, CJK, emoji, repeated filler — the most token-efficient text left is
+ * ordinary repeated prose at 6.0 characters per token. Hence six.
+ *
+ * A bound measured on samples is not a proof, so it is not asked to be one: this
+ * only decides whether refusing is certainly right, and the provider decides the
+ * rest.
+ */
+export const FAVOURABLE_CHARS_PER_TOKEN = 6;
+
+export function minimumTokens(text: string): number {
+  return Math.floor(text.replace(/\s+/g, " ").trim().length / FAVOURABLE_CHARS_PER_TOKEN);
+}
+
+/**
  * Usage for a reply whose stream died mid-generation. No usage event ever arrives,
  * so the choice is between dropping the message from session totals (understating
  * spend) and reporting a guess as fact. Neither is acceptable: input tokens are

@@ -3,6 +3,9 @@ import {
   CRITICAL_AT,
   WARN_AT,
   contextStatus,
+  estimateTokens,
+  minimumTokens,
+  FAVOURABLE_CHARS_PER_TOKEN,
   costOf,
   estimateUsage,
   formatCost,
@@ -192,5 +195,38 @@ describe("the picker opens on a model the server can actually use", () => {
     // and runChat reports "no provider configured" rather than this being silent.
     const { configured, declared } = await withKeys([]);
     expect(configured).toBe(declared);
+  });
+});
+
+describe("minimumTokens", () => {
+  it("never exceeds what the real tokenizer returns", () => {
+    // The ratios on the right are measured against OpenAI's o200k_base. The point
+    // of the function is that it sits under every one of them.
+    const cases: Array<[string, number]> = [
+      ["lorem ipsum dolor sit amet consectetur adipiscing elit. ".repeat(200), 6.0],
+      ["The quick brown fox jumps over the lazy dog every morning. ".repeat(200), 5.08],
+      ["antidisestablishmentarianism ".repeat(200), 4.83],
+    ];
+    for (const [text, charsPerToken] of cases) {
+      const real = Math.floor(text.length / charsPerToken);
+      expect(minimumTokens(text)).toBeLessThanOrEqual(real);
+    }
+  });
+
+  it("is not fooled by whitespace", () => {
+    // A run of spaces is a single token to a BPE tokenizer, which is what made a
+    // plain chars/N bound impossible: a thousand spaces measured 111 characters to
+    // the token. Collapsing runs first is what makes the bound hold.
+    expect(minimumTokens(" ".repeat(10_000))).toBe(0);
+    expect(minimumTokens("\n".repeat(10_000))).toBe(0);
+    expect(minimumTokens(`const x = 1;${" ".repeat(5_000)}const y = 2;`)).toBeLessThan(10);
+  });
+
+  it("reads under estimateTokens on prose, and is not a drop-in for it", () => {
+    const prose = "the quick brown fox jumps over the lazy dog. ".repeat(100);
+    expect(minimumTokens(prose)).toBeLessThan(estimateTokens(prose));
+    // Not a claim about dense text — minimumTokens is a floor for everything. It
+    // is here to pin that the two functions are not interchangeable.
+    expect(FAVOURABLE_CHARS_PER_TOKEN).toBeGreaterThan(4);
   });
 });

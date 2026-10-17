@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { handleChatRequest } from "./handle";
-import { REWRITE_MODEL_ID, resolveChain } from "../config";
+import { REWRITE_MODEL_ID, getModel, resolveChain } from "../config";
+import { FAVOURABLE_CHARS_PER_TOKEN } from "../usage";
 import type {
   Adapter,
   ChatMessage,
@@ -165,19 +166,28 @@ describe("the context window guard", () => {
    * overflow path is the piece no amount of ordinary use will reach — which is
    * exactly why it needs a test rather than a demonstration.
    */
-  const overflow = (): ChatMessage[] => [
-    // Four million characters is a shade over a million tokens at four per token,
-    // which is more than any window configured here and therefore overflows all of
-    // them. Sized against the constant rather than a literal, so raising a window
-    // in config cannot silently stop this test exercising the guard.
-    { role: "user", content: "x".repeat(4_200_000) },
-    { role: "assistant", content: "..." },
-    { role: "user", content: "What is Relay's SLA?" },
-  ];
+  /**
+   * Sized from the configuration rather than written as a literal, because the
+   * guard now measures a floor rather than a guess: raising a window in config, or
+   * changing FAVOURABLE_CHARS_PER_TOKEN, must not quietly leave this test sending
+   * a conversation that comfortably fits.
+   */
+  const overflowing = (modelId: string): ChatMessage[] => {
+    const model = getModel(modelId)!;
+    const needed = model.contextWindow - model.maxOutputTokens;
+    // No whitespace: minimumTokens() collapses runs, so filler made of spaces
+    // would measure as nothing at all.
+    const filler = "x".repeat((needed + 1_000) * FAVOURABLE_CHARS_PER_TOKEN);
+    return [
+      { role: "user", content: filler },
+      { role: "assistant", content: "..." },
+      { role: "user", content: "What is Relay's SLA?" },
+    ];
+  };
 
   it("refuses an overlong conversation without calling a provider", async () => {
     const fake = makeFake({});
-    const { status, events } = await post(overflow(), GPT, fake);
+    const { status, events } = await post(overflowing(GPT), GPT, fake);
 
     expect(status).toBe(413);
     expect(find(events, "error")?.code).toBe("context_too_long");
@@ -188,7 +198,7 @@ describe("the context window guard", () => {
 
   it("names the model and the way out", async () => {
     const fake = makeFake({});
-    const { events } = await post(overflow(), CLAUDE, fake);
+    const { events } = await post(overflowing(CLAUDE), CLAUDE, fake);
 
     const error = find(events, "error");
     // Which model ran out matters, because switching is one of the two remedies
@@ -196,6 +206,31 @@ describe("the context window guard", () => {
     expect(error?.message).toContain("Claude Opus 5.5");
     expect(error?.message).toMatch(/New Conversation/i);
     expect((error as { modelId?: string })?.modelId).toBe(CLAUDE);
+  });
+
+  it("does not refuse prose that the old chars/4 guess would have blocked", async () => {
+    // The regression this guard was rewritten for. Ordinary prose runs about six
+    // characters to the token, so chars/4 reads it as half again as long as it is.
+    // This conversation overflows GPT's window by that reckoning and fits by the
+    // real one — and the only recovery from a wrong refusal is for the reader to
+    // throw the conversation away, so it must not be refused.
+    const model = getModel(GPT)!;
+    const prose = "lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor. ";
+    const chars = (model.contextWindow - model.maxOutputTokens) * 4 + 100_000;
+    const fake = makeFake({ [GPT]: { deltas: ["fine"] } });
+
+    const { status } = await post(
+      [
+        { role: "user", content: prose.repeat(Math.ceil(chars / prose.length)) },
+        { role: "assistant", content: "..." },
+        { role: "user", content: "What is Relay's SLA?" },
+      ],
+      GPT,
+      fake,
+    );
+
+    expect(status).toBe(200);
+    expect(fake.calls).toEqual([GPT]);
   });
 
   it("does not refuse a conversation that still fits", async () => {

@@ -5,7 +5,7 @@ import { buildPrompt, buildScopePrompt } from "../prompt";
 import { runChat } from "../providers/stream";
 import type { Adapter, ChatMessage, Rewriter, StreamEvent } from "../providers/types";
 import { resolveQuery } from "./rewrite";
-import { estimateTokens } from "../usage";
+import { minimumTokens } from "../usage";
 
 export interface ChatRequestBody {
   messages: ChatMessage[];
@@ -161,12 +161,25 @@ export async function handleChatRequest(request: Request, deps: ChatDeps): Promi
     ? buildScopePrompt(question)
     : buildPrompt(question, retrieval, resolved.query);
 
-  // Refuse before dispatch rather than letting the provider reject it, so the user
-  // gets an instruction instead of a provider error.
-  const projected = estimateTokens(
+  /**
+   * Refuse before dispatch, but only when refusing is certainly right.
+   *
+   * This used to ask `estimateTokens` whether the prompt would fit, which is a
+   * coin-flip dressed as a check: chars/4 under-counts a pasted log dump by half
+   * and over-counts plain prose by half again, so it both waved through requests
+   * that overflowed and would have blocked conversations that fitted.
+   *
+   * `minimumTokens` is deliberately an under-estimate, so this fires only when
+   * even the most token-efficient reading of the conversation overflows. Anything
+   * it lets past is caught by the provider, which does not estimate — and a
+   * pre-latch rejection falls through to the next model in the chain, which may
+   * have a larger window and simply answer. Guessing here would pre-empt that with
+   * a refusal telling the reader to do by hand what the chain already does.
+   */
+  const floor = minimumTokens(
     `${prompt.system}\n${prompt.userContent}\n${history.map((m) => m.content).join("\n")}`,
   );
-  if (projected + selected.maxOutputTokens > selected.contextWindow) {
+  if (floor + selected.maxOutputTokens > selected.contextWindow) {
     return errorResponse(
       {
         type: "error",
