@@ -4,12 +4,32 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Answer } from "./Answer";
 import { ModelPicker } from "./ModelPicker";
 import { Nimbo, type NimboState } from "./Nimbo";
-import { SessionChip, SessionDialog, SessionMenu, type SessionRow } from "./SessionPanel";
+import {
+  SessionChip,
+  SessionDialog,
+  SessionMenu,
+  type SessionRow,
+} from "./SessionPanel";
 import { Sources } from "./Sources";
 import type { PublicModel } from "@/lib/config";
-import type { AnsweringModel, PassageView, RewriteView, StreamEvent } from "@/lib/providers/types";
-import { activeConflicts, declaresConflict, stripConflictMarker } from "@/lib/citations";
-import { type Usage, contextStatus, estimateTokens, formatCost, sumUsage } from "@/lib/usage";
+import type {
+  AnsweringModel,
+  PassageView,
+  RewriteView,
+  StreamEvent,
+} from "@/lib/providers/types";
+import {
+  activeConflicts,
+  declaresConflict,
+  stripConflictMarker,
+} from "@/lib/citations";
+import {
+  type Usage,
+  contextStatus,
+  estimateTokens,
+  formatCost,
+  sumUsage,
+} from "@/lib/usage";
 
 interface Turn {
   id: string;
@@ -32,9 +52,18 @@ interface Turn {
  */
 const STARTERS: Array<{ q: string; product?: string }> = [
   { q: "Which of our products support SSO via SAML 2.0?", product: "vault" },
-  { q: "What are the key differences between Relay's Pro and Enterprise tiers?", product: "relay" },
-  { q: "A client is getting a 403 on the Relay API. What should they check first?", product: "relay" },
-  { q: "What's the SLA for Priority 1 tickets on Nimbus Vault?", product: "vault" },
+  {
+    q: "What are the key differences between Relay's Pro and Enterprise tiers?",
+    product: "relay",
+  },
+  {
+    q: "A client is getting a 403 on the Relay API. What should they check first?",
+    product: "relay",
+  },
+  {
+    q: "What's the SLA for Priority 1 tickets on Nimbus Vault?",
+    product: "vault",
+  },
 ];
 
 /**
@@ -62,7 +91,7 @@ const IDLE_LINES = [
   "Did you know? You can switch model mid-conversation and keep the thread.",
   "Did you know? Every answer shows the passages it was built from.",
   "Did you know? I'll flag it when two documents disagree with each other.",
-  "Did you know? Follow-ups work — just ask \"and for Relay?\" next.",
+  'Did you know? Follow-ups work — just ask "and for Relay?" next.',
   "Did you know? The token count and cost of every answer are shown below.",
   "Did you know? You can export the whole session as CSV or JSON.",
   "Did you know? If the documents don't cover it, I say so instead of guessing.",
@@ -81,7 +110,10 @@ function activity(
 
   if (live.passages.length) {
     const n = live.passages.length;
-    return { state: "searching", line: `Reading ${n} passage${n === 1 ? "" : "s"}…` };
+    return {
+      state: "searching",
+      line: `Reading ${n} passage${n === 1 ? "" : "s"}…`,
+    };
   }
   return turns.length > 1
     ? { state: "thinking", line: "Working out what you mean…" }
@@ -115,7 +147,8 @@ export function Chat({ products }: { products: string[] }) {
 
   useEffect(() => {
     if (busy) return;
-    const pick = () => setIdleLine(IDLE_LINES[Math.floor(Math.random() * IDLE_LINES.length)]);
+    const pick = () =>
+      setIdleLine(IDLE_LINES[Math.floor(Math.random() * IDLE_LINES.length)]);
     pick();
     const timer = setInterval(pick, 9000);
     return () => clearInterval(timer);
@@ -134,11 +167,15 @@ export function Chat({ products }: { products: string[] }) {
 
     const style = getComputedStyle(el);
     const line = parseFloat(style.lineHeight) || 22;
-    const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+    const padding =
+      parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
     const maxLines = window.matchMedia("(max-width: 680px)").matches ? 5 : 12;
 
     el.style.height = "auto";
-    const height = Math.min(el.scrollHeight, Math.round(line * maxLines + padding));
+    const height = Math.min(
+      el.scrollHeight,
+      Math.round(line * maxLines + padding),
+    );
     el.style.height = `${height}px`;
     el.style.overflowY = el.scrollHeight > height ? "auto" : "hidden";
   }, []);
@@ -167,7 +204,9 @@ export function Chat({ products }: { products: string[] }) {
   const selected = models.find((m) => m.id === selectedId);
 
   const patch = useCallback((id: string, change: Partial<Turn>) => {
-    setTurns((prev) => prev.map((t) => (t.id === id ? { ...t, ...change } : t)));
+    setTurns((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, ...change } : t)),
+    );
   }, []);
 
   const send = useCallback(
@@ -200,7 +239,9 @@ export function Chat({ products }: { products: string[] }) {
         });
 
         if (!response.body) {
-          const fallback = (await response.json().catch(() => null)) as StreamEvent | null;
+          const fallback = (await response
+            .json()
+            .catch(() => null)) as StreamEvent | null;
           patch(turn.id, {
             streaming: false,
             error: {
@@ -219,7 +260,10 @@ export function Chat({ products }: { products: string[] }) {
           patch(turn.id, {
             streaming: false,
             error: {
-              message: event.type === "error" ? event.message : "Something went wrong.",
+              message:
+                event.type === "error"
+                  ? event.message
+                  : "Something went wrong.",
               partial: false,
             },
           });
@@ -259,11 +303,17 @@ export function Chat({ products }: { products: string[] }) {
                 patch(turn.id, { answer });
                 break;
               case "usage":
-                patch(turn.id, { usage: event.usage, truncated: event.truncated });
+                patch(turn.id, {
+                  usage: event.usage,
+                  truncated: event.truncated,
+                });
                 break;
               case "error":
                 patch(turn.id, {
-                  error: { message: event.message, partial: Boolean(event.partial) },
+                  error: {
+                    message: event.message,
+                    partial: Boolean(event.partial),
+                  },
                   usage: event.usage ?? null,
                   streaming: false,
                 });
@@ -278,7 +328,10 @@ export function Chat({ products }: { products: string[] }) {
       } catch {
         patch(turn.id, {
           streaming: false,
-          error: { message: "Lost the connection to the server. Resend to try again.", partial: false },
+          error: {
+            message: "Lost the connection to the server. Resend to try again.",
+            partial: false,
+          },
         });
       } finally {
         setBusy(false);
@@ -289,7 +342,9 @@ export function Chat({ products }: { products: string[] }) {
   );
 
   useEffect(() => {
-    transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight });
+    transcriptRef.current?.scrollTo({
+      top: transcriptRef.current.scrollHeight,
+    });
   }, [turns]);
 
   /**
@@ -313,11 +368,15 @@ export function Chat({ products }: { products: string[] }) {
    * comes from config, switching models recomputes this immediately (E7).
    */
   const contextTokens = useMemo(() => {
-    const lastKnown = [...turns].reverse().find((t) => t.usage && t.usage.inputTokens > 0);
+    const lastKnown = [...turns]
+      .reverse()
+      .find((t) => t.usage && t.usage.inputTokens > 0);
     if (lastKnown?.usage) {
       return lastKnown.usage.inputTokens + estimateTokens(lastKnown.answer);
     }
-    return estimateTokens(turns.map((t) => `${t.question}${t.answer}`).join(""));
+    return estimateTokens(
+      turns.map((t) => `${t.question}${t.answer}`).join(""),
+    );
   }, [turns]);
 
   const context = contextStatus(contextTokens, selected?.contextWindow ?? 0);
@@ -377,7 +436,9 @@ export function Chat({ products }: { products: string[] }) {
           ].join("\n");
 
     const url = URL.createObjectURL(
-      new Blob([body], { type: format === "json" ? "application/json" : "text/csv" }),
+      new Blob([body], {
+        type: format === "json" ? "application/json" : "text/csv",
+      }),
     );
     const link = document.createElement("a");
     link.href = url;
@@ -391,9 +452,11 @@ export function Chat({ products }: { products: string[] }) {
    * twice re-triggers the jump. Scoped to a turn, because the same passage id can
    * appear in several answers in one conversation.
    */
-  const [focus, setFocus] = useState<{ turnId: string; passageId: string; nonce: number } | null>(
-    null,
-  );
+  const [focus, setFocus] = useState<{
+    turnId: string;
+    passageId: string;
+    nonce: number;
+  } | null>(null);
 
   const jumpToPassage = (turnId: string, passageId: string) =>
     setFocus((prev) => ({ turnId, passageId, nonce: (prev?.nonce ?? 0) + 1 }));
@@ -410,10 +473,10 @@ export function Chat({ products }: { products: string[] }) {
         </div>
 
         {/*
-          * Absent rather than disabled when there is nothing to clear. A greyed
-          * control on an empty screen reads as broken, and this one is unusable
-          * for precisely as long as the screen it sits above is empty.
-          */}
+         * Absent rather than disabled when there is nothing to clear. A greyed
+         * control on an empty screen reads as broken, and this one is unusable
+         * for precisely as long as the screen it sits above is empty.
+         */}
         {turns.length ? (
           <button
             type="button"
@@ -437,16 +500,18 @@ export function Chat({ products }: { products: string[] }) {
           <div className="empty">
             <div className="greeting">
               <h2>
-                Hi! I&rsquo;m Nimbo — the NimbusStack product assistant. Ask me anything and
-                I&rsquo;ll look it up in the knowledge base and give you the best answer I can
-                find. I&rsquo;m honest and straightforward, and I&rsquo;ll never make up an
-                answer.
+                Hi! I&rsquo;m Nimbo — the NimbusStack product assistant. Ask me
+                anything and I&rsquo;ll look it up in the knowledge base and
+                give you the best answer I can find. I&rsquo;m honest and
+                straightforward, and I&rsquo;ll never make up an answer.
               </h2>
             </div>
 
             <p className="sample-label">Sample questions you can ask me</p>
             <div className="starters">
-              {STARTERS.filter((s) => !s.product || products.includes(s.product)).map((s) => (
+              {STARTERS.filter(
+                (s) => !s.product || products.includes(s.product),
+              ).map((s) => (
                 <button
                   key={s.q}
                   type="button"
@@ -467,113 +532,131 @@ export function Chat({ products }: { products: string[] }) {
           // which passages a generation happens to cite.
           const declared = declaresConflict(turn.answer);
           const answerText = stripConflictMarker(turn.answer);
-          const conflicts = declared ? activeConflicts(turn.conflicts, turn.answer) : [];
+          const conflicts = declared
+            ? activeConflicts(turn.conflicts, turn.answer)
+            : [];
 
           return (
-          <article className="turn" key={turn.id}>
-            <h2 className="question">{turn.question}</h2>
+            <article className="turn" key={turn.id}>
+              <h2 className="question">{turn.question}</h2>
 
-            <div className="answer">
-              {declared ? (
-                <div className="banner conflict">
-                  <h4>These documents don&rsquo;t agree</h4>
-                  <p>
-                    More than one document covers this and they differ. The answer gives both
-                    versions with their dates — check the flagged passages before quoting a
-                    figure.
-                  </p>
-                </div>
-              ) : null}
-
-              {turn.rewrite && turn.rewrite.query !== turn.question ? (
-                <p className="resolved-query">
-                  Searched for <code>{turn.rewrite.query}</code>
-                </p>
-              ) : null}
-
-              <Answer
-                text={answerText}
-                // The caret trails text being written, so it waits for there to be
-                // some. Before that the status line above already says what is
-                // happening, and a blinking block under it says it a second time.
-                streaming={turn.streaming && Boolean(answerText)}
-                onCite={(id) => jumpToPassage(turn.id, id)}
-              />
-
-              {turn.truncated ? (
-                <div className="banner fault">
-                  <h4>Cut off at the length limit</h4>
-                  <p>This answer reached the output cap and stops early. Resend for the rest.</p>
-                </div>
-              ) : null}
-
-              {turn.error ? (
-                <div className="banner fault">
-                  <h4>{turn.error.partial ? "This answer is incomplete" : "Couldn't answer"}</h4>
-                  <p>{turn.error.message}</p>
-                </div>
-              ) : null}
-
-              <Sources
-                passages={turn.passages}
-                conflicts={conflicts}
-                answer={answerText}
-                focusId={focus?.turnId === turn.id ? focus.passageId : null}
-                focusNonce={focus?.turnId === turn.id ? focus.nonce : 0}
-              />
-
-              {turn.model || turn.usage ? (
-                /*
-                 * One line by default, the breakdown behind it. This was three
-                 * lines of mono under every answer — who answered, the token
-                 * split, the cost, and the cost of resolving the follow-up — which
-                 * is more accounting than prose on a short reply. The model and the
-                 * cost stay visible, because R4 asks for them per message; the
-                 * split and the resolving call are detail, and detail folds away.
-                 */
-                <details className="answer-meta">
-                  <summary>
-                    {turn.model ? (
-                      <span className="answered-by">
-                        {turn.model.label}
-                        {turn.model.fallback ? (
-                          <span className="badge">fallback from {turn.model.selectedId}</span>
-                        ) : null}
-                      </span>
-                    ) : null}
-                    {turn.usage ? (
-                      <>
-                        <span>
-                          {(turn.usage.inputTokens + turn.usage.outputTokens).toLocaleString()} tokens
-                        </span>
-                        <span>
-                          {formatCost(turn.usage.costUsd + (turn.rewrite?.usage.costUsd ?? 0))}
-                          {turn.usage.estimated ? " (estimated)" : ""}
-                        </span>
-                      </>
-                    ) : null}
-                  </summary>
-
-                  <div className="answer-meta-detail">
-                    {turn.usage ? (
-                      <span>
-                        {turn.usage.inputTokens.toLocaleString()} in /{" "}
-                        {turn.usage.outputTokens.toLocaleString()} out ·{" "}
-                        {formatCost(turn.usage.costUsd)} answering
-                      </span>
-                    ) : null}
-                    {turn.rewrite ? (
-                      <span>
-                        {turn.rewrite.usage.inputTokens.toLocaleString()} in /{" "}
-                        {turn.rewrite.usage.outputTokens.toLocaleString()} out ·{" "}
-                        {formatCost(turn.rewrite.usage.costUsd)} resolving the question
-                      </span>
-                    ) : null}
+              <div className="answer">
+                {declared ? (
+                  <div className="banner conflict">
+                    <h4>These documents don&rsquo;t agree</h4>
+                    <p>
+                      More than one document covers this and they differ. The
+                      answer gives both versions with their dates — check the
+                      flagged passages before quoting a figure.
+                    </p>
                   </div>
-                </details>
-              ) : null}
-            </div>
-          </article>
+                ) : null}
+
+                {turn.rewrite && turn.rewrite.query !== turn.question ? (
+                  <p className="resolved-query">
+                    Searched for <code>{turn.rewrite.query}</code>
+                  </p>
+                ) : null}
+
+                <Answer
+                  text={answerText}
+                  // The caret trails text being written, so it waits for there to be
+                  // some. Before that the status line above already says what is
+                  // happening, and a blinking block under it says it a second time.
+                  streaming={turn.streaming && Boolean(answerText)}
+                  onCite={(id) => jumpToPassage(turn.id, id)}
+                />
+
+                {turn.truncated ? (
+                  <div className="banner fault">
+                    <h4>Cut off at the length limit</h4>
+                    <p>
+                      This answer reached the output cap and stops early. Resend
+                      for the rest.
+                    </p>
+                  </div>
+                ) : null}
+
+                {turn.error ? (
+                  <div className="banner fault">
+                    <h4>
+                      {turn.error.partial
+                        ? "This answer is incomplete"
+                        : "Couldn't answer"}
+                    </h4>
+                    <p>{turn.error.message}</p>
+                  </div>
+                ) : null}
+
+                <Sources
+                  passages={turn.passages}
+                  conflicts={conflicts}
+                  answer={answerText}
+                  focusId={focus?.turnId === turn.id ? focus.passageId : null}
+                  focusNonce={focus?.turnId === turn.id ? focus.nonce : 0}
+                />
+
+                {turn.model || turn.usage ? (
+                  /*
+                   * One line by default, the breakdown behind it. This was three
+                   * lines of mono under every answer — who answered, the token
+                   * split, the cost, and the cost of resolving the follow-up — which
+                   * is more accounting than prose on a short reply. The model and the
+                   * cost stay visible, because R4 asks for them per message; the
+                   * split and the resolving call are detail, and detail folds away.
+                   */
+                  <details className="answer-meta">
+                    <summary>
+                      {turn.model ? (
+                        <span className="answered-by">
+                          {turn.model.label}
+                          {turn.model.fallback ? (
+                            <span className="badge">
+                              fallback from {turn.model.selectedId}
+                            </span>
+                          ) : null}
+                        </span>
+                      ) : null}
+                      {turn.usage ? (
+                        <>
+                          <span>
+                            {(
+                              turn.usage.inputTokens + turn.usage.outputTokens
+                            ).toLocaleString()}{" "}
+                            tokens
+                          </span>
+                          <span>
+                            {formatCost(
+                              turn.usage.costUsd +
+                                (turn.rewrite?.usage.costUsd ?? 0),
+                            )}
+                            {turn.usage.estimated ? " (estimated)" : ""}
+                          </span>
+                        </>
+                      ) : null}
+                    </summary>
+
+                    <div className="answer-meta-detail">
+                      {turn.usage ? (
+                        <span>
+                          {turn.usage.inputTokens.toLocaleString()} in /{" "}
+                          {turn.usage.outputTokens.toLocaleString()} out ·{" "}
+                          {formatCost(turn.usage.costUsd)} answering
+                        </span>
+                      ) : null}
+                      {turn.rewrite ? (
+                        <span>
+                          {turn.rewrite.usage.inputTokens.toLocaleString()} in /{" "}
+                          {turn.rewrite.usage.outputTokens.toLocaleString()} out
+                          · {formatCost(turn.rewrite.usage.costUsd)} resolving
+                          the question
+                        </span>
+                      ) : null}
+                    </div>
+                  </details>
+                ) : null}
+              </div>
+            </article>
           );
         })}
       </div>
@@ -584,7 +667,6 @@ export function Chat({ products }: { products: string[] }) {
           <span className="nimbo-says">{live.line}</span>
         </div>
       ) : null}
-
 
       <form
         className="composer"
@@ -608,43 +690,47 @@ export function Chat({ products }: { products: string[] }) {
             }}
           />
 
-          <button
-            type="submit"
-            className="send"
-            disabled={busy || !draft.trim()}
-            aria-label="Send"
-            title="Send"
-          >
-            {/* A paper plane: the gesture is sending, not scrolling up. */}
-            <svg viewBox="0 0 16 16" width="17" height="17" aria-hidden="true" focusable="false">
-              <g
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+          <div className="composer-tools">
+            <ModelPicker
+              models={models}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              disabled={busy}
+            />
+            <SessionChip
+              usage={sessionUsage}
+              context={context}
+              contextWindow={selected?.contextWindow ?? 0}
+              onOpen={() => setDetailsOpen(true)}
+            />
+            <button
+              type="submit"
+              className="send"
+              disabled={busy || !draft.trim()}
+              aria-label="Send"
+              title="Send"
+            >
+              {/* A paper plane: the gesture is sending, not scrolling up. */}
+              <svg
+                viewBox="0 0 16 16"
+                width="17"
+                height="17"
+                aria-hidden="true"
+                focusable="false"
               >
-                <path d="M14.6 1.4 1.7 6.1l5.2 2.8 2.8 5.2 4.9-12.7Z" />
-                <path d="M14.6 1.4 6.9 8.9" />
-              </g>
-            </svg>
-          </button>
-        </div>
-
-        {/* Out of the text field, which is now only a text field. */}
-        <div className="composer-tools">
-          <ModelPicker
-            models={models}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            disabled={busy}
-          />
-          <SessionChip
-            usage={sessionUsage}
-            context={context}
-            contextWindow={selected?.contextWindow ?? 0}
-            onOpen={() => setDetailsOpen(true)}
-          />
+                <g
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M14.6 1.4 1.7 6.1l5.2 2.8 2.8 5.2 4.9-12.7Z" />
+                  <path d="M14.6 1.4 6.9 8.9" />
+                </g>
+              </svg>
+            </button>
+          </div>
         </div>
       </form>
 

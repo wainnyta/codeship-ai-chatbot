@@ -826,15 +826,15 @@ input {
 }
 
 /*
- * The field is only a field. Its controls used to share the same bordered box,
- * which made the box a panel rather than an input: the model picker sat where the
- * text was going to go, and the box grew and shrank around two different things.
+ * Input and its controls share one bordered box, so the model you are about to
+ * use and the cost you are running up sit with the question you are about to ask,
+ * rather than floating beneath it as a separate strip.
  */
 .composer-box {
-  position: relative;
   border: 1px solid var(--rule);
   border-radius: 8px;
   background: var(--surface);
+  padding-bottom: 5px;
 }
 
 .composer-box:focus-within {
@@ -847,8 +847,7 @@ input {
   resize: none;
   background: none;
   border: none;
-  /* Right padding clears the send button, which sits inside the field. */
-  padding: 11px 50px 11px 13px;
+  padding: 11px 13px 4px;
   font-family: var(--serif);
   font-size: 15.5px;
   line-height: 1.5;
@@ -864,37 +863,42 @@ input {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 8px;
+  padding: 0 7px 0 10px;
 }
 
 /*
- * An icon, and the same icon while it waits. Swapping the label to "Answering"
+ * Minimal, and the last thing on the row it belongs to. A filled dark square was
+ * the heaviest element on a page whose subject is the answer above it — and the
+ * action it names is already on the Enter key, so it is a confirmation of
+ * something you can do without it rather than the way to do it.
+ *
+ * The icon does not change while it waits. Swapping the label to "Answering"
  * resized the button mid-conversation and said what the character above the
  * composer was already saying; going grey is the whole message.
  */
 .send {
-  position: absolute;
-  right: 7px;
-  bottom: 7px;
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
-  background: var(--ink);
-  color: #fff;
-  border: 1px solid var(--ink);
-  border-radius: 7px;
+  margin-left: auto;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
   cursor: pointer;
+  color: var(--slate);
+  transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
 }
 
 .send:hover:not(:disabled) {
-  background: #000;
+  border-color: var(--rule);
+  background: var(--paper);
+  color: var(--cite);
 }
 
 .send:disabled {
-  background: var(--slate);
-  border-color: var(--slate);
-  opacity: 0.5;
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
