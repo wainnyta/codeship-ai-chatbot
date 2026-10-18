@@ -159,23 +159,36 @@ export async function handleChatRequest(request: Request, deps: ChatDeps): Promi
    * around a thing that provably is not documented until something turns up is how
    * an honest refusal becomes a confident wrong answer.
    *
-   * The model proposes VOCABULARY for the words that matched nothing — it never
-   * gets to restate the question. See expand.ts: a mapping can only vouch for a
-   * word the user typed, weighted at its stand-in's IDF, through the same path the
-   * hand-written synonym table uses. One attempt, never a loop.
+   * For each word that matched nothing the model decides between two things, and
+   * is trusted with neither. It can call the word MISSPELLED, which is checked
+   * against an edit budget in kb/spelling.ts and so cannot smuggle in a different
+   * word; or it can propose VOCABULARY, which feeds the weighted `credited` path
+   * and so can only vouch for a word the reader typed. It never gets to restate
+   * the question. One attempt, never a loop.
+   *
+   * The two are separate because the fixes are not alike. A vocabulary gap means
+   * the reader's word is absent but its meaning is not, so the word is credited at
+   * its stand-in's weight. A misspelling means the reader's word was never the
+   * word they meant, so it is replaced in the sentence and everything downstream —
+   * the stopword filter above all — sees what they intended to type. Crediting a
+   * typo would leave it in the coverage denominator at maximum idf, which is the
+   * whole defect: "how many products do wr have" refused at 0.259 while the same
+   * question with "we" answers at 1.000.
    */
   let expansion: Awaited<ReturnType<typeof proposeVocabulary>> | null = null;
   if (found.kind === "no_evidence" && shouldRetry(found.reason) && found.unmatchedTerms?.length) {
     expansion = await proposeVocabulary({
+      question: resolved.query,
       unmatched: found.unmatchedTerms,
       rewriter: deps.rewriter,
       signal: request.signal,
     });
 
-    if (Object.keys(expansion.synonyms).length) {
+    if (Object.keys(expansion.synonyms).length || Object.keys(expansion.repairs).length) {
       const second = await retriever.search(resolved.query, {
         history: searchHistory,
         extraSynonyms: expansion.synonyms,
+        extraRepairs: expansion.repairs,
       });
       // Keep the second pass only if it actually found something. A retry that
       // fails leaves the original refusal exactly as it was.

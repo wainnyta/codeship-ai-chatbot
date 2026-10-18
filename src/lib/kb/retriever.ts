@@ -98,6 +98,17 @@ export interface SearchOptions {
    * than a rewritten query.
    */
   extraSynonyms?: Record<string, string[]>;
+  /**
+   * Spelling repairs proposed by a model after a first pass failed, already
+   * validated against an edit budget in src/lib/kb/spelling.ts.
+   *
+   * Applied to the QUESTION before it is tokenised, unlike `extraSynonyms` which
+   * feeds the weighted credit path. That difference is deliberate: a repaired word
+   * is the reader's own word spelled correctly, so it should be treated exactly as
+   * if they had typed it — including being dropped as a stopword, which is the
+   * whole point for "wr" -> "we".
+   */
+  extraRepairs?: Record<string, string>;
 }
 
 export interface Retriever {

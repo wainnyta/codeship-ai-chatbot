@@ -34,6 +34,13 @@ interface Case {
   expect_conflict?: boolean;
   /** Mappings a second pass would propose, to exercise the retry deterministically. */
   synonyms?: Record<string, string[]>;
+  /**
+   * Spelling repairs a second pass would propose. Simulated for the same reason
+   * as `synonyms`: the model's judgement is not under test here, the machinery
+   * that accepts or rejects it is. What the model may say is pinned separately,
+   * by the edit-budget tests in src/lib/chat/expand.test.ts.
+   */
+  repairs?: Record<string, string>;
   tags?: string[];
   note?: string;
   skip?: boolean;
@@ -246,7 +253,7 @@ async function sweep(cases: Case[], build: () => Retriever): Promise<void> {
     config.thresholds.coverage = theta;
     const r = build();
     const rs: CaseResult[] = [];
-    for (const c of cases) rs.push(score(c, await r.search(c.q, { history: c.history, extraSynonyms: c.synonyms })));
+    for (const c of cases) rs.push(score(c, await r.search(c.q, { history: c.history, extraSynonyms: c.synonyms, extraRepairs: c.repairs })));
     const m = measure(rs);
     process.stdout.write(
       `  ${theta.toFixed(2)}        ${String(m.falseRefusals).padStart(2)}/${m.answerable}` +
@@ -286,7 +293,7 @@ async function main(): Promise<void> {
     }
 
     const results: CaseResult[] = [];
-    for (const c of cases) results.push(score(c, await retriever.search(c.q, { history: c.history, extraSynonyms: c.synonyms })));
+    for (const c of cases) results.push(score(c, await retriever.search(c.q, { history: c.history, extraSynonyms: c.synonyms, extraRepairs: c.repairs })));
     const m = report(engine.name, results);
     if ("close" in retriever && typeof retriever.close === "function") {
       (retriever as { close(): void }).close();
@@ -317,7 +324,7 @@ async function main(): Promise<void> {
       config.thresholds.denseFloor = f;
       const r = new FtsRetriever(INDEX_PATH);
       const rs: CaseResult[] = [];
-      for (const c of cases) rs.push(score(c, await r.search(c.q, { history: c.history, extraSynonyms: c.synonyms })));
+      for (const c of cases) rs.push(score(c, await r.search(c.q, { history: c.history, extraSynonyms: c.synonyms, extraRepairs: c.repairs })));
       const m = measure(rs);
       process.stdout.write(
         `  ${f === 99 ? " off" : f.toFixed(2)}        ${String(m.falseRefusals).padStart(2)}/${m.answerable}` +

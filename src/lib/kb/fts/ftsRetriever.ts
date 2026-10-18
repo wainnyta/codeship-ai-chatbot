@@ -13,6 +13,7 @@ import type { Chunk } from "../chunk";
 import { clientConfig, extractIdents, expansionTerms, type ClientConfig, type Ident } from "../clientConfig";
 import { applyGate, type Candidate, type Stats } from "../gate";
 import { cosine, embedQuery, rrf } from "../embeddings";
+import { applyRepairs, editDistance, isRepair } from "../spelling";
 import { englishStopwords } from "../stopwords";
 import type { Retrieval, Retriever, SearchOptions } from "../retriever";
 
@@ -76,22 +77,6 @@ function maskIdents(query: string, rules: ClientConfig["identifiers"]): string {
  * records as an open case rather than pretending otherwise.
  */
 /** Levenshtein with an early exit once the budget is blown. */
-function editDistance(a: string, b: string, budget: number): number {
-  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
-  for (let i = 1; i <= a.length; i++) {
-    const row = [i];
-    let rowMin = i;
-    for (let j = 1; j <= b.length; j++) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      const v = Math.min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + cost);
-      row.push(v);
-      if (v < rowMin) rowMin = v;
-    }
-    if (rowMin > budget) return budget + 1;
-    prev = row;
-  }
-  return prev[b.length];
-}
 
 function productsIn(text: string, roster: readonly string[]): string[] {
   return roster.filter((p) => new RegExp(`\\b${p}\\b`, "i").test(text));
@@ -327,8 +312,39 @@ export class FtsRetriever implements Retriever {
   }
 
   async search(query: string, options: SearchOptions = {}): Promise<Retrieval> {
-    const { history = [], limit, extraSynonyms } = options;
+    const { history = [], limit, extraSynonyms, extraRepairs } = options;
     const config = this.config;
+
+    /**
+     * Repairs are applied to the SENTENCE, before anything is tokenised.
+     *
+     * A corrected word is the reader's own word spelled right, so everything
+     * downstream should see it as typed: the stopword filter drops "we" where it
+     * could do nothing with "wr", identifier extraction reads a fixed version
+     * string, and the product scan sees a fixed product name. Crediting the typo
+     * instead — the path a synonym takes — would leave the misspelling in the
+     * coverage denominator at maximum idf, which is the defect being fixed.
+     */
+    if (extraRepairs && Object.keys(extraRepairs).length) {
+      /**
+       * Re-checked HERE, where the repair is applied, and not only where it was
+       * parsed.
+       *
+       * The edit budget is the one thing standing between this and the query
+       * rewrite that answered "how much do I owe my landlord" with every pricing
+       * table. A guard that lives only at the parse site protects only the caller
+       * that happens to go through it — and the eval harness, which calls search()
+       * directly, walked straight past it with {"landlord":"pricing"} and
+       * reproduced the original defect exactly. The case is repair-cannot-substitute.
+       *
+       * So the retriever trusts nothing: whatever reaches it, a repair that is not
+       * within budget of the word it claims to repair is discarded.
+       */
+      const safe = Object.fromEntries(
+        Object.entries(extraRepairs).filter(([from, to]) => isRepair(from, to)),
+      );
+      if (Object.keys(safe).length) query = applyRepairs(query, safe);
+    }
 
     const named = productsIn(query, this.products);
     const products = named.length
