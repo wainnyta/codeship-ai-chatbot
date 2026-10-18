@@ -938,6 +938,25 @@ input {
     padding-inline: 16px;
   }
 
+  /*
+   * 16px, and not a half-pixel less. This is not a typographic choice.
+   *
+   * iOS Safari zooms the page when a text field smaller than 16px takes focus,
+   * and it does NOT zoom back out when the field is blurred. The page is left
+   * magnified and pannable, which reads as "I can drag the whole app around" —
+   * and no amount of overflow-x on the page can prevent it, because panning a
+   * zoomed page is the visual viewport moving, not the layout overflowing. At
+   * 15.5px the composer tripped this the first time anyone typed a question.
+   *
+   * The other way to stop it is `maximum-scale=1, user-scalable=no` on the
+   * viewport meta, which works by taking pinch-zoom away from everyone. That
+   * fails WCAG 1.4.4 and punishes readers who need to magnify, to spare one
+   * control half a pixel. This is the fix; that is not.
+   */
+  .composer textarea {
+    font-size: 16px;
+  }
+
   /* The header was taking a third of a phone screen: a two-line title above a
      three-line subtitle, in a view whose whole job is reading answers. */
   .titles h1 {
