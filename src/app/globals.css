@@ -980,6 +980,23 @@ input {
     padding: 14px 15px 13px;
   }
 
+  /* Title plus two exports plus a close on one row does not fit a phone. The
+     title gives up its width first and the buttons tighten, because a wrapped
+     heading still reads and "Export / CSV" over two lines does not. */
+  .dialog-head h2 {
+    font-size: 17px;
+  }
+
+  .dialog-actions {
+    gap: 6px;
+  }
+
+  .dialog-actions button {
+    padding: 6px 8px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
   .ledger-q {
     max-width: 150px;
   }
@@ -1548,13 +1565,13 @@ input {
   font-size: 13px;
 }
 
-.dialog-foot {
+.dialog-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
-  margin-top: 16px;
 }
 
-.dialog-foot button {
+.dialog-actions button {
   background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: 6px;
@@ -1565,12 +1582,12 @@ input {
   color: var(--slate);
 }
 
-.dialog-foot button:hover:not(:disabled) {
+.dialog-actions button:hover:not(:disabled) {
   border-color: var(--slate);
   color: var(--ink);
 }
 
-.dialog-foot button:disabled {
+.dialog-actions button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }

@@ -160,19 +160,30 @@ export function SessionDialog({
   return (
       <div className="scrim">
         <div className="dialog" ref={root} role="dialog" aria-modal="true" aria-label="Session details">
+          {/* The export buttons sit in the head, not under the table. A long
+              session scrolls them off the bottom of the dialog, and exporting is
+              the one thing a reader opens this panel to DO. */}
           <div className="dialog-head">
             <h2>This session</h2>
-            <button
-              type="button"
-              ref={closeRef}
-              className="icon-button"
-              onClick={() => onClose()}
-              aria-label="Close"
-            >
-              <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false">
-                <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.6" fill="none" />
-              </svg>
-            </button>
+            <div className="dialog-actions">
+              <button type="button" onClick={() => onExport("csv")} disabled={empty}>
+                Export CSV
+              </button>
+              <button type="button" onClick={() => onExport("json")} disabled={empty}>
+                Export JSON
+              </button>
+              <button
+                type="button"
+                ref={closeRef}
+                className="icon-button"
+                onClick={() => onClose()}
+                aria-label="Close"
+              >
+                <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false">
+                  <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.6" fill="none" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           <div className="totals">
@@ -235,15 +246,6 @@ export function SessionDialog({
               </tbody>
             </table>
           )}
-
-          <div className="dialog-foot">
-            <button type="button" onClick={() => onExport("csv")} disabled={empty}>
-              Export CSV
-            </button>
-            <button type="button" onClick={() => onExport("json")} disabled={empty}>
-              Export JSON
-            </button>
-          </div>
         </div>
       </div>
   );
