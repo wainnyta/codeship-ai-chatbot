@@ -52,8 +52,8 @@ export interface NoEvidence {
    * A grounded, retriever-produced explanation of WHY nothing was found.
    *
    * The spec's trap note asks that a version question aimed at the wrong product
-   * "must be reported as such", and "I can only answer questions pertaining to the
-   * NimbusStack knowledge base" does not report anything. The index already knows
+   * "must be reported as such", and "I couldn't find it in the
+   * NimbusStack documentation" does not report anything. The index already knows
    * the answer — it knows Vault's release line is 3.x — and was throwing it away.
    *
    * Written by the retriever from the index, never by the model, and rendered

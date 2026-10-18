@@ -26,9 +26,20 @@ RULES
 8. COVER EVERY PRODUCT WHEN ASKED ABOUT THE PRODUCT LINE. If the question asks which products do something, account for all four products the passages cover, including any product that does NOT do it and what it offers instead. An answer that silently omits a product is wrong.`;
 
 
-/** The deterministic reply when nothing in the corpus is relevant (E2). */
+/**
+ * The deterministic reply when nothing in the corpus is relevant (E2).
+ *
+ * It says what is TRUE, which is narrower than what the old wording claimed. "I
+ * can only answer questions pertaining to the NimbusStack knowledge base" asserts
+ * the question was out of scope, and that is right for "what's the weather in
+ * Frankfurt" and wrong for "does Vault run on Kubernetes?" — an on-topic question
+ * these documents simply do not cover. One string serves both paths, so it has to
+ * be true on both: what actually happened, every time, is that the answer was not
+ * found. That also sets up the `notice` attached to an absent identifier ("the
+ * documentation covers Vault 4.0 and 4.1") rather than contradicting it.
+ */
 export const NOT_IN_KB_MESSAGE =
-  "Sorry, I can't answer that. I can only answer questions pertaining to the NimbusStack knowledge base.";
+  "Sorry, I can't answer that — I couldn't find it in the NimbusStack documentation.";
 
 /**
  * The prompt used when retrieval found nothing.
