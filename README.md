@@ -196,13 +196,14 @@ Set the same provider keys in the Vercel project's environment variables.
 ```
 config/models.json          every model's metadata and the fallback order
 nimbusstack-knowledge-base/ the corpus, exactly as supplied
-src/lib/kb/                 chunking and BM25 retrieval
+src/lib/kb/                 chunking, the SQLite FTS5 index and the evidence gate
 src/lib/chat/rewrite.ts     follow-up resolution (the pre-retrieval rewrite)
 src/lib/providers/          adapters, the latch, error classification
 src/lib/chat/handle.ts      the chat endpoint
 src/lib/usage.ts            token, cost and context arithmetic
 src/components/             chat UI, sources, answer renderer
-docs/specs/                 the design spec this was built from
+config/clients/             per-client vocabulary and thresholds, as data
+eval/                       the labelled set the thresholds are swept against
 ```
 
 ---
