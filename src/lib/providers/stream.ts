@@ -22,6 +22,8 @@ export interface RunChatOptions {
   adapter: Adapter;
   /** Present when a rewrite call was made, so its cost is reported (R4). */
   rewrite?: RewriteView;
+  /** Present when a second retrieval pass was attempted. */
+  retry?: { modelId: string; usage: import("../usage").Usage; mapped: string[] };
   signal?: AbortSignal;
 }
 
@@ -60,13 +62,14 @@ function promptTokens(prompt: BuiltPrompt, history: ChatMessage[]): number {
  * is therefore still recoverable, and the held token costs nothing perceptible.
  */
 export async function* runChat(options: RunChatOptions): AsyncGenerator<StreamEvent> {
-  const { chain, selectedId, prompt, history, retrieval, adapter, rewrite, signal } = options;
+  const { chain, selectedId, prompt, history, retrieval, adapter, rewrite, retry, signal } = options;
 
   yield {
     type: "meta",
     passages: toPassageViews(retrieval),
     conflicts: retrieval.conflicts,
     ...(rewrite ? { rewrite } : {}),
+    ...(retry ? { retry } : {}),
     ...((retrieval as { notice?: string }).notice ? { notice: (retrieval as { notice?: string }).notice } : {}),
   };
 

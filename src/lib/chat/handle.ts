@@ -4,6 +4,7 @@ import { toLegacyResult, type Retriever } from "../kb/retriever";
 import { buildPrompt, buildScopePrompt } from "../prompt";
 import { runChat } from "../providers/stream";
 import type { Adapter, ChatMessage, Rewriter, StreamEvent } from "../providers/types";
+import { proposeVocabulary, shouldRetry } from "./expand";
 import { resolveQuery } from "./rewrite";
 import { minimumTokens } from "../usage";
 
@@ -143,19 +144,63 @@ export async function handleChatRequest(request: Request, deps: ChatDeps): Promi
    * `empty` is derived from the union tag, so `empty === false` now implies
    * `passages.length > 0` by construction rather than by convention.
    */
-  const retrieval = toLegacyResult(
-    await retriever.search(resolved.query, {
-      history: resolved.modelId
-        ? []
-        : history.filter((m) => m.role === "user").map((m) => m.content),
-    }),
-  );
+  const searchHistory = resolved.modelId
+    ? []
+    : history.filter((m) => m.role === "user").map((m) => m.content);
+
+  let found = await retriever.search(resolved.query, { history: searchHistory });
+
+  /**
+   * THE SECOND PASS.
+   *
+   * Only on a miss, so the common case pays nothing, and only on the misses a
+   * second pass can possibly help: `identifier_absent` is excluded, because that
+   * means the reader named a version or status code no document carries. Searching
+   * around a thing that provably is not documented until something turns up is how
+   * an honest refusal becomes a confident wrong answer.
+   *
+   * The model proposes VOCABULARY for the words that matched nothing — it never
+   * gets to restate the question. See expand.ts: a mapping can only vouch for a
+   * word the user typed, weighted at its stand-in's IDF, through the same path the
+   * hand-written synonym table uses. One attempt, never a loop.
+   */
+  let expansion: Awaited<ReturnType<typeof proposeVocabulary>> | null = null;
+  if (found.kind === "no_evidence" && shouldRetry(found.reason) && found.unmatchedTerms?.length) {
+    expansion = await proposeVocabulary({
+      unmatched: found.unmatchedTerms,
+      rewriter: deps.rewriter,
+      signal: request.signal,
+    });
+
+    if (Object.keys(expansion.synonyms).length) {
+      const second = await retriever.search(resolved.query, {
+        history: searchHistory,
+        extraSynonyms: expansion.synonyms,
+      });
+      // Keep the second pass only if it actually found something. A retry that
+      // fails leaves the original refusal exactly as it was.
+      if (second.kind === "grounded") found = second;
+    }
+  }
+
+  const retrieval = toLegacyResult(found);
 
   // Reported whenever a call was made, including when it returned the question
   // unchanged — those tokens were still spent, and R4 says so.
   const rewrite =
     resolved.modelId && resolved.usage
       ? { query: resolved.query, modelId: resolved.modelId, usage: resolved.usage }
+      : undefined;
+
+  // The second pass is a real provider call and is billed as one (R4), separately
+  // from both the answer and the coreference rewrite.
+  const retry =
+    expansion?.modelId && expansion.usage
+      ? {
+          modelId: expansion.modelId,
+          usage: expansion.usage,
+          mapped: Object.keys(expansion.synonyms),
+        }
       : undefined;
 
   /**
@@ -213,6 +258,7 @@ export async function handleChatRequest(request: Request, deps: ChatDeps): Promi
       retrieval,
       adapter: deps.adapter,
       rewrite,
+      retry,
       signal: request.signal,
     }),
   );

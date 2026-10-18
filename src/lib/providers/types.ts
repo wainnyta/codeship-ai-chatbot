@@ -120,6 +120,12 @@ export type StreamEvent =
        * than a generated claim.
        */
       notice?: string;
+      /**
+       * Present when a first pass found nothing and a second was attempted: what
+       * it cost, and which of the reader's words it found documentation vocabulary
+       * for. Reported whether or not the retry succeeded — the tokens were spent.
+       */
+      retry?: { modelId: string; usage: Usage; mapped: string[] };
     }
   /** Which model actually answered. Emitted once the first text is committed. */
   | { type: "model"; model: AnsweringModel }

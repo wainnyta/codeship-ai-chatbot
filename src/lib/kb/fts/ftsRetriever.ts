@@ -265,7 +265,7 @@ export class FtsRetriever implements Retriever {
   }
 
   async search(query: string, options: SearchOptions = {}): Promise<Retrieval> {
-    const { history = [], limit } = options;
+    const { history = [], limit, extraSynonyms } = options;
     const config = this.config;
 
     const named = productsIn(query, this.products);
@@ -299,7 +299,8 @@ export class FtsRetriever implements Retriever {
     const subjectOnly = literal.length === 0 && named.length > 0;
     if (subjectOnly) literal = [...products];
 
-    const expansions = expansionTerms(query, config, this.products).filter(
+    const proposedAll = Object.values(extraSynonyms ?? {}).flat();
+    const expansions = [...expansionTerms(query, config, this.products), ...proposedAll].filter(
       (t) => !literal.includes(t) && !this.stopwords.has(t),
     );
 
@@ -325,6 +326,20 @@ export class FtsRetriever implements Retriever {
      */
     const credited = new Map<string, number>();
     const corrections = new Map<string, string>();
+    const roster = new Set(this.products);
+
+    /**
+     * Is this question demonstrably about the corpus, before any model proposal is
+     * consulted? A NAMED PRODUCT or a DOCUMENTED IDENTIFIER — nothing weaker.
+     *
+     * "any matched literal word" was tried first and is too cheap: "what is the
+     * weather today" anchors on `today`, which appears in Pulse's sign-in section
+     * ("not available today"), and the proposal then rescued a question about the
+     * weather. A model proposal is the least trustworthy input in the system —
+     * generated per query, unreviewed, unlike the curated table — so it gets the
+     * strongest anchor requirement, not the most convenient one.
+     */
+    const anchored = products.length > 0 || idents.length > 0;
     for (const term of literal) {
       if ((literalHits.get(term)?.size ?? 0) > 0) continue;
 
@@ -339,7 +354,30 @@ export class FtsRetriever implements Retriever {
         continue;
       }
 
-      const own = expansionTerms(term, config, this.products).filter((e) => this.hits(e).size > 0);
+      /**
+       * The hand-written table first, then anything a second pass proposed for
+       * this query — but a PROPOSAL ONLY APPLIES TO AN ANCHORED QUERY.
+       *
+       * Measured, after I argued the opposite: when every unmatched term gets
+       * credited, the denominator shrinks with the numerator and coverage reaches
+       * 1.0 however weak the stand-ins are. "Weighted at the stand-in's IDF" only
+       * protects a query that still has an uncredited word in it. So a proposal
+       * mapping "landlord" onto "pricing" rescued a question about rent.
+       *
+       * The asymmetry that actually matters is not the weighting, it is the
+       * ANCHOR: "what does Vault charge" names a product; "how much do I owe my
+       * landlord" names nothing, matches nothing and carries no identifier. A
+       * proposal is a bridge, not a foundation — it may connect a question that is
+       * demonstrably about this corpus to the documentation's own words, and it may
+       * not establish that the question is about this corpus in the first place.
+       *
+       * The curated table in the client config is deliberately NOT subject to this:
+       * it is reviewed, and it is what lets "what products do we have" work.
+       */
+      const proposed = anchored ? (extraSynonyms?.[term] ?? []).filter((e) => !roster.has(e)) : [];
+      const own = [...expansionTerms(term, config, this.products), ...proposed].filter(
+        (e) => this.hits(e).size > 0,
+      );
       if (!own.length) continue;
       // Weighted at the STAND-IN's idf, not the absent term's. An absent word
       // scores maximum idf by definition, so crediting it at its own weight made

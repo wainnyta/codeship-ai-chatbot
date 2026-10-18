@@ -217,6 +217,8 @@ export function applyGate(input: GateInput): Retrieval {
   );
   const cover = coverage(literalTerms, queryIdents, matchedTerms, matchedIdents, stats, credited);
 
+  const unmatchedTerms = literalTerms.filter((t) => !matchedTerms.has(t) && !credited.has(t));
+
   const identVetoedEarly =
     thresholds.identVetoes !== false && queryIdents.length > 0 && matchedIdents.size === 0;
 
@@ -232,6 +234,7 @@ export function applyGate(input: GateInput): Retrieval {
       corpusVersion,
       semanticCoverage,
       notice: identVetoedEarly ? input.absentNotice?.() : undefined,
+      unmatchedTerms,
     };
   }
 
@@ -292,6 +295,7 @@ export function applyGate(input: GateInput): Retrieval {
       corpusVersion,
       semanticCoverage,
       notice: identVetoed ? input.absentNotice?.() : undefined,
+      unmatchedTerms,
     };
   }
 

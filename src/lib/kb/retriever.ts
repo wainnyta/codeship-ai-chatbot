@@ -61,6 +61,11 @@ export interface NoEvidence {
    * citation: it is a fact about what the corpus contains, not a generated claim.
    */
   notice?: string;
+  /**
+   * Literal query terms that matched nothing. The input to a second pass — these
+   * are the only words a vocabulary proposal is allowed to speak about.
+   */
+  unmatchedTerms?: string[];
   reason: "no_match" | "below_coverage" | "no_passage_earned" | "identifier_absent";
   product: string | null;
   coverage: number;
@@ -84,6 +89,15 @@ export interface SearchOptions {
   history?: string[];
   /** Ceiling on the source list. Defaults to the client config's maxPassages. */
   limit?: number;
+  /**
+   * Per-query term mappings, proposed by a model after a first pass failed.
+   *
+   * Feeds exactly the same `credited` path as the hand-written synonym table, so a
+   * mapping can only vouch for a word the user typed and is weighted at its
+   * stand-in's IDF. See src/lib/chat/expand.ts for why this is a mapping rather
+   * than a rewritten query.
+   */
+  extraSynonyms?: Record<string, string[]>;
 }
 
 export interface Retriever {
