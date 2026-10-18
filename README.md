@@ -181,13 +181,48 @@ Not covered by automated tests: the real Anthropic, OpenAI and Google adapters, 
 
 ## Deploying
 
-Deploys to Vercel with no configuration beyond the environment variables. The knowledge base is read from disk at runtime, so `next.config.ts` traces `nimbusstack-knowledge-base/**` into the serverless bundle; without that the deployed app boots with an empty corpus.
+Deploys to Vercel with no configuration beyond the environment variables and a Node version.
 
 ```bash
-npx vercel --prod
+npx vercel          # first run links the project and deploys a preview
+npx vercel --prod   # promote to production
 ```
 
-Set the same provider keys in the Vercel project's environment variables.
+Set `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` and `GOOGLE_GENERATIVE_AI_API_KEY` in the project's environment variables. The app degrades to whichever providers have keys, so a deploy with one key works; it falls back across the chain in `config/models.json`.
+
+**Node 22.5 or newer.** The index is SQLite through `node:sqlite`, which does not exist before 22.5 and still prints an experimental warning. `engines` and `.nvmrc` pin it; on Vercel also set the project's Node version to 22.x, because the dashboard setting wins over `engines`.
+
+**The search index is built, not committed.** `npm run build` runs `build:index` before `next build`, writing `data/kb.sqlite` from `nimbusstack-knowledge-base/`. `/data/` is gitignored on purpose, so a fresh clone cannot deploy a stale index — but it also means any host must run the full `build` script, not `next build` alone.
+
+**Three things are read from disk at runtime**, so `next.config.ts` traces all three into the serverless bundle for `/api/chat`:
+
+| traced | why |
+| --- | --- |
+| `data/**` | the FTS5 index the retriever queries |
+| `config/clients/**` | the client's vocabulary, thresholds and vector cache |
+| `nimbusstack-knowledge-base/**` | the corpus, for the legacy retriever behind `KB_RETRIEVER=legacy` |
+
+Without the tracing the deployed app boots with an empty corpus and refuses everything. The home page reads the index too, but it prerenders statically, so that read happens at build time and nothing is needed at runtime for it.
+
+**Embeddings are cached in the repo.** `config/clients/nimbusstack.vectors.json` holds the 38 vectors, keyed by content hash, so a build re-embeds nothing and needs no key. Change the corpus and the build will call OpenAI for the chunks that moved — which means `OPENAI_API_KEY` has to be present at **build** time, not just at runtime. The build prints `dense arm N cached + M embedded`; `M` is how many it paid for.
+
+### Anywhere else
+
+Nothing here is Vercel-specific — it is a standard Next.js server plus a file on disk. For a container (Fly, Railway, Cloud Run):
+
+```dockerfile
+FROM node:22-slim
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build        # builds data/kb.sqlite, then next build
+CMD ["npm", "start"]
+```
+
+The index is baked into the image, which is the behaviour you want: the image is the corpus version, so a rollback rolls the documents back with the code. `corpusVersion` is stamped into the index at build time and travels with every retrieval, so an answer can be traced to the exact corpus that produced it.
+
+What would change at a scale this does not have: the index is rebuilt on every deploy and read from local disk, which stops working the moment the corpus updates on a different cadence from the code. That is the point to move the index out of the image and behind a volume or a database, not before.
 
 ---
 
