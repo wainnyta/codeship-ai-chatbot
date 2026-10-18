@@ -58,7 +58,10 @@ CREATE VIRTUAL TABLE chunks_vocab USING fts5vocab(chunks_fts, 'row');
 CREATE TABLE idents(
   chunk_rowid INTEGER NOT NULL REFERENCES chunks(rowid),
   kind        TEXT NOT NULL,
-  value       TEXT NOT NULL
+  value       TEXT NOT NULL,
+  -- The line the identifier was documented on. The retriever tokenises this to
+  -- learn what the identifier is about; see Ident.context in clientConfig.ts.
+  context     TEXT
 );
 CREATE INDEX idents_lookup ON idents(kind, value);
 CREATE INDEX idents_chunk  ON idents(chunk_rowid);
@@ -155,7 +158,9 @@ export async function buildIndex(options: {
       `INSERT INTO chunks(id, file, doc_title, doc_date, product, heading, body)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
     );
-    const insertIdent = db.prepare(`INSERT INTO idents(chunk_rowid, kind, value) VALUES (?, ?, ?)`);
+    const insertIdent = db.prepare(
+      `INSERT INTO idents(chunk_rowid, kind, value, context) VALUES (?, ?, ?, ?)`,
+    );
 
     let identCount = 0;
     db.exec("BEGIN");
@@ -176,7 +181,7 @@ export async function buildIndex(options: {
       // sharing one definition is the point: two copies drift, and the drift is
       // invisible from outside.
       for (const ident of extractIdents(`${chunk.heading}\n${chunk.text}`, config.identifiers, "index")) {
-        insertIdent.run(rowid, ident.kind, ident.value);
+        insertIdent.run(rowid, ident.kind, ident.value, ident.context ?? null);
         identCount++;
       }
     }

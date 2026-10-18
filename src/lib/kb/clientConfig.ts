@@ -49,6 +49,8 @@ export interface ClientConfig {
     maxConflicts: number;
     rrfK: number;
     denseFloor: number;
+    /** How many corpus-derived topic terms a matched identifier contributes. */
+    identTopicTerms?: number;
     identVouches?: boolean;
     identVetoes?: boolean;
   };
@@ -144,6 +146,33 @@ function applyNormalize(value: string, how: IdentifierRule["normalize"]): string
 export interface Ident {
   kind: string;
   value: string;
+  /**
+   * The line the identifier was found on, captured at INDEX time only.
+   *
+   * This is what lets the corpus say what an identifier is ABOUT. "429" on its own
+   * retrieves the one chunk that carries it and nothing else; the line it sits on —
+   * "the rate limit for the tier was reached, read X-RateLimit-Reset" — is the
+   * documented vocabulary of its subject, written by the same people who wrote the
+   * rest of the corpus. Deriving it beats a hand-kept table mapping each code to
+   * its topic, which is a per-client artifact somebody has to extend every time a
+   * new code is documented.
+   */
+  context?: string;
+}
+
+/**
+ * The line a match sits on.
+ *
+ * A line, not a sentence or a fixed window: these are markdown documents, where a
+ * line is already the unit the author chose — one bullet, one table row, one
+ * troubleshooting entry. "**429 Too Many Requests.** The rate limit for the tier
+ * was reached. Read `X-RateLimit-Reset` for the retry time." is exactly one line,
+ * and a sentence split would have cut it in half at the fact that matters.
+ */
+function lineAt(text: string, index: number): string {
+  const start = text.lastIndexOf("\n", index) + 1;
+  const end = text.indexOf("\n", index);
+  return text.slice(start, end === -1 ? undefined : end).trim();
 }
 
 /** Every typed identifier in a piece of text, per the client's rules. */
@@ -153,9 +182,14 @@ export function extractIdents(text: string, rules: IdentifierRule[], side: "quer
   for (const rule of rules) {
     if (rule.values) {
       for (const v of rule.values) {
-        if (new RegExp(`\\b${v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(text)) {
+        const hit = new RegExp(`\\b${v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").exec(text);
+        if (hit) {
           const value = applyNormalize(v, rule.normalize);
-          out.set(`${rule.kind}:${value}`, { kind: rule.kind, value });
+          out.set(`${rule.kind}:${value}`, {
+            kind: rule.kind,
+            value,
+            context: side === "index" ? lineAt(text, hit.index) : undefined,
+          });
         }
       }
       continue;
@@ -167,7 +201,11 @@ export function extractIdents(text: string, rules: IdentifierRule[], side: "quer
       const captured = m[rule.captureGroup ?? 1] ?? m[0];
       if (!captured) continue;
       const value = applyNormalize(captured, rule.normalize);
-      out.set(`${rule.kind}:${value}`, { kind: rule.kind, value });
+      out.set(`${rule.kind}:${value}`, {
+        kind: rule.kind,
+        value,
+        context: side === "index" ? lineAt(text, m.index ?? 0) : undefined,
+      });
     }
   }
 

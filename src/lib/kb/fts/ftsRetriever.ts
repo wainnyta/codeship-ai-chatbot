@@ -176,6 +176,68 @@ export class FtsRetriever implements Retriever {
     return hit !== undefined ? hit : this.hits(term).size;
   }
 
+  /**
+   * What the corpus says an identifier is ABOUT.
+   *
+   * An identifier retrieves with surgical precision and no breadth: "a client
+   * receives 429" has no word in common with any document, so `code:429` pulls the
+   * one chunk carrying that string and the answer is whatever that chunk happens
+   * to say. Measured, on exactly that question: ONE passage, zero matched terms,
+   * answered only because identVouches overrode a coverage of 0.250. Correct, and
+   * missing both the per-tier limits in relay.md#pricing and the fact that
+   * `X-RateLimit-*` only exists since Relay 4.1 — neither chunk contains "429".
+   *
+   * The documented line is the bridge. "The rate limit for the tier was reached,
+   * read X-RateLimit-Reset for the retry time" is the subject's vocabulary, written
+   * by the same hand as the rest of the corpus, so the terms it yields are terms
+   * the corpus actually uses.
+   *
+   * WHY THIS IS DERIVED AND NOT CONFIGURED
+   *
+   * The alternative is a table mapping 429 -> ["rate","limit"], which is the
+   * defect class this build keeps removing: a per-client artifact that silently
+   * goes stale the day a new code is documented. Here a new code works the moment
+   * someone writes a line about it, for this client and every later one.
+   *
+   * These are EXPANSIONS and nothing else. They never enter `literal`, so they
+   * cannot move coverage, and they never enter `credited`, which is built per-term
+   * from a term's own synonyms. The gate's arithmetic is untouched: the 429
+   * question still has coverage 0.250 and still answers only because the
+   * identifier vouched for it. All this can do is widen what gets retrieved, which
+   * is why its one knob is a cap, measured against false grounding.
+   */
+  private identTopics(idents: Ident[], exclude: Set<string>, max: number): string[] {
+    if (!idents.length || max <= 0) return [];
+
+    const where = idents.map(() => "(kind = ? AND value = ?)").join(" OR ");
+    const params = idents.flatMap((i) => [i.kind, i.value]);
+    const rows = this.db
+      .prepare(`SELECT DISTINCT context FROM idents WHERE (${where}) AND context IS NOT NULL`)
+      .all(...params) as Array<{ context: string }>;
+
+    const values = new Set(idents.map((i) => String(i.value).toLowerCase()));
+    const seen = new Set<string>();
+    for (const row of rows) {
+      for (const token of row.context.toLowerCase().match(/[a-z][a-z0-9-]*/g) ?? []) {
+        if (token.length < 3) continue;
+        if (this.stopwords.has(token) || exclude.has(token)) continue;
+        // The identifier's own value, and the roster and brand names, are scope —
+        // the same rule the ranking query applies.
+        if (values.has(token) || this.products.includes(token) || this.brand.has(token)) continue;
+        seen.add(token);
+      }
+    }
+
+    // Rarest first. A line's distinctive words are the ones that name its subject;
+    // its common ones ("check", "order") are shared with every other line and would
+    // spend the cap on noise.
+    const stats = this.stats();
+    return [...seen]
+      .filter((t) => this.df(t) > 0)
+      .sort((a, b) => stats.idf(b) - stats.idf(a))
+      .slice(0, max);
+  }
+
   private stats(): Stats {
     const idfOf = (df: number) => Math.log(1 + (this.size - df + 0.5) / (df + 0.5));
     return {
@@ -300,9 +362,16 @@ export class FtsRetriever implements Retriever {
     if (subjectOnly) literal = [...products];
 
     const proposedAll = Object.values(extraSynonyms ?? {}).flat();
-    const expansions = [...expansionTerms(query, config, this.products), ...proposedAll].filter(
-      (t) => !literal.includes(t) && !this.stopwords.has(t),
+    const topics = this.identTopics(
+      idents,
+      new Set(literal),
+      config.thresholds.identTopicTerms ?? 0,
     );
+    const expansions = [
+      ...expansionTerms(query, config, this.products),
+      ...proposedAll,
+      ...topics,
+    ].filter((t) => !literal.includes(t) && !this.stopwords.has(t));
 
     const stats = this.stats();
 
@@ -417,7 +486,34 @@ export class FtsRetriever implements Retriever {
       }
     }
 
-    const matchTerms = [...literal.map((t) => corrections.get(t) ?? t), ...expansions];
+    /**
+     * The roster is a SCOPE signal, and scope must not accumulate as topical evidence.
+     *
+     * `literalTerms` already drops product and brand names for exactly this reason,
+     * and the conflict signal drops them again. The one place the rule was not
+     * applied was the ranking query, where the `$ROSTER` expansion put all four
+     * product names plus the company name into MATCH — so BM25 scored a chunk for
+     * NAMING the products rather than for answering about them.
+     *
+     * Measured, on "what product offers the cheapest pricing tier":
+     *
+     *   with roster     security-overview#identity 14.69 (rank 1), pulse#pricing rank 11
+     *   without roster  security-overview#identity  2.81 (rank 9), pulse#pricing rank  7
+     *
+     * security-overview#identity contains no price. It won because it mentions
+     * Relay, Vault, Pulse and Ledger in one paragraph, and five low-IDF terms
+     * repeated beat one high-IDF term in a table. Pulse's and Ledger's pricing
+     * tables fell past the passage budget, and the answer said Pulse's pricing was
+     * not in the knowledge base while citing the other three.
+     *
+     * The roster still retrieves when it is the only signal there is — "what
+     * products do you sell" has no other word that means anything — but it can no
+     * longer outrank the documents that carry the answer.
+     */
+    const scoped = (t: string) => roster.has(t) || this.brand.has(t);
+    const corrected = literal.map((t) => corrections.get(t) ?? t);
+    const topical = [...corrected, ...expansions.filter((t) => !scoped(t))];
+    const matchTerms = topical.length ? topical : [...corrected, ...expansions];
     if (matchTerms.length === 0 && idents.length === 0 && denseRanked.length === 0) {
       return { kind: "no_evidence", reason: "no_match", product, coverage: 0, corpusVersion: this.corpusVersion, semanticCoverage };
     }
