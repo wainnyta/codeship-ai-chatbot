@@ -1,0 +1,218 @@
+{
+  "$comment": "BUCKET B \u2014 everything client-specific, as data rather than code. The engine (src/lib/kb/fts) and the product logic (src/lib/kb/gate.ts) contain no NimbusStack knowledge at all. Onboarding a second client is a new file in this directory plus its own corpus and eval/<client>.jsonl \u2014 not a new branch of the retriever.",
+  "client": "nimbusstack",
+  "corpus": {
+    "dir": "nimbusstack-knowledge-base",
+    "$productTitleComment": "How a document declares which product it belongs to. Still inferred from an H1 here because this corpus is hand-written markdown. The moment a Confluence export or a PDF arrives this must become DECLARED metadata (frontmatter or a sidecar manifest) \u2014 a page titled 'Vault - Pricing (FY26)' yields no product, which silently disables scoping and makes a Vault question answerable from Pulse's documents. The builder refuses to index a dateless or productless chunk silently; see requireProduct.",
+    "productTitlePattern": "^Nimbus\\s+([A-Za-z][A-Za-z0-9-]*)",
+    "requireProduct": false,
+    "$requireProductComment": "false while the corpus is hand-written and 4 of 10 files are legitimately company-wide. Flip to true the day ingestion is automated, so a parse failure quarantines a document instead of indexing it unscoped.",
+    "brandTerms": [
+      "nimbus",
+      "nimbusstack"
+    ],
+    "$brandTermsComment": "Excluded from topical terms exactly as product names are. The company's own name says 'this question is about us', not 'this is the topic' \u2014 counting it as topical evidence let 'who is the CEO of NimbusStack' and 'tell me about Nimbus Forge' clear the refusal gate on the brand alone."
+  },
+  "$fieldWeightComment": "Real BM25F per-field weighting, passed to bm25(). This replaces repeating the heading three times into the token stream \u2014 which inflated the document length and so partly cancelled, through BM25's length normalisation, the boost it was meant to create.",
+  "fieldWeights": {
+    "heading": 10.0,
+    "body": 1.0
+  },
+  "$stopwordComment": "LANGUAGE-LEVEL English function words (src/lib/kb/stopwords.ts), not a per-corpus list. The original plan was to derive these from corpus document frequency, and that is MEASURABLY WRONG at this corpus's shape: df/N >= 0.5 yields only 2 useless terms, and by df/N >= 0.3 the rule has already removed 'pro', 'enterpris' and 'saml' \u2014 the tier names and subject matter every pricing and SSO question turns on. Document frequency cannot tell a function word from a topic word. dfRatio below is therefore a BUILD DIAGNOSTIC only: the build prints which terms are corpus-wide boilerplate, and nothing filters on it. `extra` is the per-client escape hatch and should stay empty.",
+  "stopwords": {
+    "mode": "english",
+    "dfRatio": 0.5,
+    "extra": []
+  },
+  "$identComment": "Typed identifiers, extracted at index time into a table and matched exactly, rather than hoped-for in a tokenizer. Every exact-token failure in the previous design was a token-matching failure against a value that is really a typed entity: 'v4.2' tokenised whole and never matched the heading '4.2', so 'what changed in Relay v4.2' was refused outright. These are structured data; FTS5's tokenizer never sees them.",
+  "identifiers": [
+    {
+      "kind": "product_version",
+      "pattern": "(?<!\\b(?:saml|tls|oidc|openid|connect|agent|api|manifest)\\s)(?<![\\w.])v?(\\d+\\.\\d+)(?![\\d.])(?!\\s*%)",
+      "normalize": "lower",
+      "$comment": "NimbusStack's own release line \u2014 the thing 'what's in Vault 4.2?' asks about. The negative lookbehind is the whole point: without it 'SAML 2.0', 'TLS 1.2' and 'Datadog Agent 7.40' were indexed as product versions, so Vault appeared to have a version 2.0 and Relay a 7.40. Harmless while identifiers were only a ranking bonus; dangerous once an ABSENT identifier vetoes a query, because a mis-extracted one can then refuse a good question."
+    },
+    {
+      "kind": "dependency_version",
+      "pattern": "\\b(saml|tls|oidc|openid|agent|api|manifest)\\s+v?(\\d+\\.\\d+)\\b",
+      "captureGroup": 2,
+      "normalize": "lower",
+      "$comment": "SAML 2.0, TLS 1.2, Datadog Agent 7.40. Kept as a real identifier kind rather than discarded, so a question naming one still matches instead of being vetoed as absent."
+    },
+    {
+      "kind": "code",
+      "pattern": "\\b([45]\\d\\d)\\b",
+      "normalize": "lower",
+      "indexPattern": "\\b([45]\\d\\d)\\s+(?:Forbidden|Unauthorized|Not\\s+Found|Bad\\s+Request|Too\\s+Many|Internal|Service|Gateway|error)",
+      "$comment": "Loose on the QUERY side ('they receive 403') and strict on the INDEX side (a status code in a document is followed by its reason phrase). Without the split, '400 days' of audit retention and '500' secrets indexed as HTTP codes, and once identifiers vouch that is a way to answer any question containing a three-digit number. Controls ident-404-absent / ident-500-absent pin it."
+    },
+    {
+      "kind": "priority",
+      "pattern": "\\b([Pp][1-4])\\b",
+      "normalize": "upper"
+    },
+    {
+      "kind": "header",
+      "pattern": "\\b(x-[a-z0-9-]+)\\b",
+      "normalize": "lower"
+    },
+    {
+      "kind": "tier",
+      "values": [
+        "Starter",
+        "Growth",
+        "Pro",
+        "Enterprise"
+      ],
+      "normalize": "title"
+    }
+  ],
+  "$identBonusComment": "Added to the negated BM25 score when a query identifier matches a chunk identifier. A bonus, deliberately, not a hard filter: 'does Relay 4.2 support Salesforce?' is answered by relay.md#integrations, which carries no 4.2 identifier, and a filter would hide it.",
+  "identBonus": 4.0,
+  "$synonymComment": "The most client-specific thing here, and the honest reason it still exists: these documents never contain the strings 'SSO' or 'cheaper' (df = 0 for both), and no tokenizer or stemmer closes a vocabulary gap. Porter stemming subsumes the inflectional patterns the old table carried by hand (price/pricing, integrat*, release*, product*), so only genuine vocabulary mapping is left. These feed RANKING ONLY \u2014 see gate.ts, where coverage is computed over literal terms. An expansion can no longer manufacture the evidence that decides whether to answer. The long-term replacement is a dense retrieval arm, which learns this mapping instead of being told it.",
+  "synonyms": {
+    "phrase": [
+      {
+        "match": "single sign[- ]?on|\\bsso\\b|federat|sign[- ]?in|\\blog ?in\\b",
+        "add": [
+          "saml",
+          "oidc",
+          "openid",
+          "connect",
+          "federated",
+          "identity"
+        ]
+      },
+      {
+        "match": "cheap|expensive|afford|budget|\\bfee\\b|discount|\\bcost|\\bprice|pricing|\\btier|per seat|per month",
+        "add": [
+          "price",
+          "pricing",
+          "tier",
+          "seat"
+        ]
+      },
+      {
+        "match": "response time|how (fast|quickly)|turnaround|\\bsla\\b",
+        "add": [
+          "sla",
+          "response",
+          "priority",
+          "hours"
+        ]
+      },
+      {
+        "match": "support ticket|severity|\\bp[1-4]\\b|priority [1-4]",
+        "add": [
+          "sla",
+          "priority",
+          "support"
+        ]
+      },
+      {
+        "match": "work with|compatib",
+        "add": [
+          "integration",
+          "minimum",
+          "version"
+        ]
+      },
+      {
+        "match": "what'?s new|changelog",
+        "add": [
+          "release",
+          "notes",
+          "new"
+        ]
+      },
+      {
+        "match": "not working|error|fail|broken|\\bissue\\b|troubleshoot",
+        "add": [
+          "troubleshooting"
+        ]
+      },
+      {
+        "match": "\\bsecret|credential|certificate\\b",
+        "add": [
+          "secrets",
+          "credentials"
+        ]
+      },
+      {
+        "match": "\\baudit\\b",
+        "add": [
+          "audit",
+          "retention"
+        ]
+      },
+      {
+        "match": "\\brate limit|throttl",
+        "add": [
+          "rate",
+          "limit"
+        ]
+      },
+      {
+        "match": "\\bproducts?\\b|product line|portfolio|catalogue?|line[- ]?up|\\bsell\\b|\\bsells\\b|\\boffer\\b|\\boffers\\b|\\bmake\\b|\\bbuild\\b|what do (we|you) (sell|offer|have|make)",
+        "add": [
+          "$ROSTER",
+          "nimbus"
+        ]
+      }
+    ],
+    "term": {
+      "forbidden": [
+        "403"
+      ],
+      "unauthorized": [
+        "403"
+      ],
+      "denied": [
+        "403"
+      ],
+      "sso": [
+        "saml",
+        "oidc",
+        "federated"
+      ],
+      "saml": [
+        "federated"
+      ],
+      "oidc": [
+        "openid"
+      ],
+      "docs": [
+        "documentation"
+      ]
+    }
+  },
+  "$thresholdComment": "BUCKET C's calibration. These are not opinions \u2014 run `npm run eval -- --sweep` and read the table. Every value here is the measured minimum-error point on eval/nimbusstack.jsonl, and the sweep prints the false-grounding / false-refusal tradeoff either side of it so the choice is visible rather than asserted.",
+  "thresholds": {
+    "$coverageComment": "The refusal gate. IDF-weighted fraction of the user's LITERAL query terms that the corpus covers, 0..1. Replaces an absolute count of 2 matched terms, which was not scale-free: an absolute bar against a growing corpus opens over time. An out-of-vocabulary term counts at MAXIMUM idf in the DENOMINATOR, so 'landlord' drags coverage toward zero instead of being silently skipped. CALIBRATED, NOT CHOSEN \u2014 `npm run eval -- --sweep` on 2026-10-17 over 82 labelled cases: 0.15 -> 0/57 false refusals, 10/25 false groundings; 0.20 -> 0/57, 8/25; 0.30 -> 0/57, 6/25; 0.35 -> 0/57, 5/25 (minimum error, 76/82 cases); 0.40 -> 1/57, 5/25; 0.50 -> 3/57, 3/25. 0.35 is the last point before false refusals start, and false groundings are the dangerous failure. Re-run the sweep after any corpus change rather than trusting this number.",
+    "coverage": 0.35,
+    "$relevanceFloorComment": "Ratio to the best score, for trimming the tail within one query. Kept because it is measurably harmless and cheap, not because it is principled: BM25 scores are not calibrated across queries, so this measures score spread. It is a tail-trimmer, and the coverage gate above is what actually decides refusal.",
+    "relevanceFloor": 0.22,
+    "passageTokenBudget": 900,
+    "maxPassages": 20,
+    "candidateLimit": 50,
+    "conflictIdfSum": 3.0,
+    "maxConflicts": 5,
+    "$maxConflictsComment": "Raised 3 -> 5 on 2026-10-17. The real Vault SAML contradiction was being sliced off behind three co-mentions (passages that merely both say SAML). The detector ranks SHARED RARE TERMS, which is not the same as ranking contradiction \u2014 it cannot see that security-overview#identity makes a claim about Vault specifically, because that claim is a table ROW inside a company-wide document whose chunk-level product is null. Widening the slice is a workaround with a stated cost (more noise in the prompt note); the real fix is an offline conflict registry with a human-adjudicated winner, which is the >200-chunk trigger.",
+    "rrfK": 60,
+    "$rrfKComment": "Reciprocal Rank Fusion constant. 60 is the value from the original RRF paper and is not sensitive; it damps the head of each ranking so one arm cannot dominate.",
+    "denseFloor": 0.58,
+    "$denseFloorComment": "Semantic coverage: the cosine similarity at which the dense arm vouches for a query that the LEXICAL coverage gate would refuse. THIS IS THE POINT OF THE DENSE ARM \u2014 it is what should let the synonym table shrink, because an embedding already knows sell~products and cheaper~pricing. Calibrate with `npm run eval -- --sweep-dense`.",
+    "identVouches": true,
+    "$identVouchesComment": "A MATCHED typed identifier vouches for the query, overriding lexical coverage. Identifiers are high-precision by construction. Measured 2026-10-17: without it, 'a client said they receive 403' scored coverage 0.25 and was refused \u2014 'client', 'said' and 'receive' appear nowhere in the corpus, so one matched code was outvoted by three absent words. It vouches only on a MATCH, so 'what's in Vault 4.2?' is still correctly refused.",
+    "identVetoes": true,
+    "$identVetoesComment": "The symmetric counterpart of identVouches: a typed identifier the corpus does NOT contain refuses the query outright. Identifiers are high-precision in both directions \u2014 naming an undocumented error code is stronger evidence than any incidental prose match. Without it, 401 and 404 (both undocumented) got opposite verdicts purely because 'user' appears in a troubleshooting section and 'client' does not. Fires only when NOTHING the reader named was found, so a query naming both a documented and an undocumented identifier still answers the documented part."
+  },
+  "$embeddingComment": "The dense arm. BUILT, MEASURED, AND LEFT OFF \u2014 the measurement is the deliverable. HEAD-TO-HEAD on 93 labelled cases, denseFloor 0.58, 2026-10-17: ON  -> 84/93, recall 0.978, MRR 0.790, 1 false refusal, 7 false groundings, 5.5 passages/answer. OFF -> 84/93, recall 0.978, MRR 0.777, 1 false refusal, 7 false groundings, 5.2 passages/answer. Per-query diff: ZERO outcome flips across all 93; ~35 passage-set changes, most of them the dense arm ADDING irrelevant passages to precise single-cell lookups \u2014 'how many seats are included with Relay Pro?' gained security-overview#identity, a release note and an SLA table. It dilutes citation precision on exactly the questions where a reader is checking one table cell mid-call, and buys +0.013 MRR, which is noise. Threshold sweep: identical to off at 0.58/0.60/0.65/0.70; actively harmful below (0.45 -> 10 false groundings, 0.40 -> 15). Ablation of 'embeddings replace the synonym table': with synonyms removed it recovered 1 of 6 vocabulary cases. WHY: measured cosine distributions overlap \u2014 answerable median 0.574, should-refuse p90 0.509 / max 0.567. Above the junk tail it stops firing for real vocabulary gaps too. At 38 short chunks nearly every query finds SOME passage at moderate similarity; the discrimination dense retrieval needs comes from having enough documents that a true match stands out. TURN IT ON WHEN: the corpus passes ~300 chunks, or the eval shows false refusals driven by vocabulary the synonym table cannot reach. Then re-run `npm run eval -- --sweep-dense`; do not trust this comment, it describes a 38-chunk corpus. TO FLIP: set enabled:true AND re-run `npm run build:index` \u2014 the vectors live in the index, and a build with enabled:false leaves that table empty. The rebuild costs no API call because vectors are cached by content hash in <client>.vectors.json. BETTER SECOND MOVE than raw cosine: a cross-encoder reranker, which reads query and passage together. UNCONTROLLED VARIABLE: text-embedding-3-small at 256 dimensions; 1536 dims or a stronger model might separate better, untested.",
+  "embeddings": {
+    "enabled": true,
+    "provider": "openai",
+    "model": "text-embedding-3-small",
+    "dimensions": 256,
+    "apiKeyEnvVar": "OPENAI_API_KEY"
+  }
+}

@@ -67,6 +67,7 @@ export async function* runChat(options: RunChatOptions): AsyncGenerator<StreamEv
     passages: toPassageViews(retrieval),
     conflicts: retrieval.conflicts,
     ...(rewrite ? { rewrite } : {}),
+    ...((retrieval as { notice?: string }).notice ? { notice: (retrieval as { notice?: string }).notice } : {}),
   };
 
   if (chain.length === 0) {

@@ -1,6 +1,6 @@
 import { DEFAULT_MODEL_ID, getModel, resolveChain } from "../config";
-import { getIndex } from "../kb";
-import type { KnowledgeBaseIndex } from "../kb/retrieve";
+import { getRetriever } from "../kb";
+import { toLegacyResult, type Retriever } from "../kb/retriever";
 import { buildPrompt, buildScopePrompt } from "../prompt";
 import { runChat } from "../providers/stream";
 import type { Adapter, ChatMessage, Rewriter, StreamEvent } from "../providers/types";
@@ -16,7 +16,12 @@ export interface ChatDeps {
   adapter: Adapter;
   /** Omitted disables query rewriting; the question is searched as typed. */
   rewriter?: Rewriter;
-  index?: KnowledgeBaseIndex;
+  /**
+   * The retrieval engine. Injected in tests; in production it comes from
+   * `getRetriever()`, which reads `KB_RETRIEVER` — so swapping engines, or
+   * reverting to the hand-written BM25, is configuration rather than a deploy.
+   */
+  retriever?: Retriever;
 }
 
 function sse(events: AsyncIterable<StreamEvent> | Iterable<StreamEvent>): Response {
@@ -93,7 +98,7 @@ export async function handleChatRequest(request: Request, deps: ChatDeps): Promi
   const selectedId = body.modelId && getModel(body.modelId) ? body.modelId : DEFAULT_MODEL_ID;
   const selected = getModel(selectedId)!;
 
-  const index = deps.index ?? getIndex();
+  const retriever = deps.retriever ?? getRetriever();
   const history = messages.slice(0, -1);
 
   /**
@@ -132,11 +137,19 @@ export async function handleChatRequest(request: Request, deps: ChatDeps): Promi
    * replies: an answer listing all four products would otherwise hand the next
    * follow-up whichever product it mentioned last.
    */
-  const retrieval = index.search(resolved.query, {
-    history: resolved.modelId
-      ? []
-      : history.filter((m) => m.role === "user").map((m) => m.content),
-  });
+  /**
+   * `toLegacyResult` adapts the port's discriminated union to the flat shape
+   * `buildPrompt` consumes. The illegal state is already gone by this point:
+   * `empty` is derived from the union tag, so `empty === false` now implies
+   * `passages.length > 0` by construction rather than by convention.
+   */
+  const retrieval = toLegacyResult(
+    await retriever.search(resolved.query, {
+      history: resolved.modelId
+        ? []
+        : history.filter((m) => m.role === "user").map((m) => m.content),
+    }),
+  );
 
   // Reported whenever a call was made, including when it returned the question
   // unchanged — those tokens were still spent, and R4 says so.

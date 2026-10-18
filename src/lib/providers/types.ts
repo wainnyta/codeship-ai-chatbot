@@ -109,6 +109,17 @@ export type StreamEvent =
        * they never typed and an unexplained passage list would look arbitrary.
        */
       rewrite?: RewriteView;
+      /**
+       * Why nothing was retrieved, when the retriever can say precisely.
+       *
+       * Produced by the retriever from the index, never by the model, and rendered
+       * as-is. "I can only answer questions pertaining to the NimbusStack knowledge
+       * base" is true but tells a support engineer nothing; "Nimbus Vault has no
+       * version 4.2 — the documentation covers 2.8, 3.0, 3.1 and 3.2" is the same
+       * refusal with the reason attached, and it is a fact about the corpus rather
+       * than a generated claim.
+       */
+      notice?: string;
     }
   /** Which model actually answered. Emitted once the first text is committed. */
   | { type: "model"; model: AnsweringModel }

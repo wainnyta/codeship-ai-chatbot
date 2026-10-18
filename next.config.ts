@@ -10,7 +10,10 @@ const nextConfig: NextConfig = {
   // The knowledge base is read from disk at runtime, so it has to be traced into
   // the serverless bundle or the deployed app boots with an empty corpus.
   outputFileTracingIncludes: {
-    "/api/chat": ["./nimbusstack-knowledge-base/**"],
+    // The corpus is read from disk at runtime by the legacy retriever, and the
+    // built FTS5 index by the new one, so both have to be traced into the
+    // serverless bundle or the deployed app boots with an empty corpus.
+    "/api/chat": ["./nimbusstack-knowledge-base/**", "./data/**", "./config/clients/**"],
   },
 
   // The dev-only badge sits bottom-left, directly over the model picker, so it

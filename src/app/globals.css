@@ -1574,3 +1574,16 @@ input {
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+/* The retriever's own explanation of why nothing matched. Deliberately quiet:
+   it is a factual footnote to a refusal, not a warning. Distinct from the
+   conflict banner, which reports a disagreement the reader must act on. */
+.retrieval-notice {
+  margin: 0.75rem 0 0;
+  padding: 0.6rem 0.8rem;
+  border-left: 2px solid var(--rule, #d8d8d2);
+  background: var(--surface-muted, rgba(0, 0, 0, 0.025));
+  color: var(--text-muted, #5a5a55);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}

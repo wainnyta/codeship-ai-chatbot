@@ -41,6 +41,8 @@ interface Turn {
   usage: Usage | null;
   /** Set when a follow-up was resolved into a standalone query before retrieval. */
   rewrite: RewriteView | null;
+  /** Retriever-produced explanation of why nothing matched. Never model-written. */
+  notice: string | null;
   truncated: boolean;
   error: { message: string; partial: boolean } | null;
   streaming: boolean;
@@ -127,6 +129,7 @@ function newTurn(question: string): Turn {
     answer: "",
     passages: [],
     conflicts: [],
+    notice: null,
     model: null,
     usage: null,
     rewrite: null,
@@ -293,6 +296,7 @@ export function Chat({ products }: { products: string[] }) {
                   passages: event.passages,
                   conflicts: event.conflicts,
                   rewrite: event.rewrite ?? null,
+                  notice: event.notice ?? null,
                 });
                 break;
               case "model":
@@ -586,6 +590,10 @@ export function Chat({ products }: { products: string[] }) {
                     </h4>
                     <p>{turn.error.message}</p>
                   </div>
+                ) : null}
+
+                {turn.notice && !turn.passages.length ? (
+                  <p className="retrieval-notice">{turn.notice}</p>
                 ) : null}
 
                 <Sources
