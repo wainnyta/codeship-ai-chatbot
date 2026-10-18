@@ -165,6 +165,10 @@ export function SessionDialog({
               the one thing a reader opens this panel to DO. */}
           <div className="dialog-head">
             <h2>This session</h2>
+            {/* Close is a sibling of the exports, not one of them: it is a control
+                of the dialog rather than an action on its contents, and keeping
+                it out of the group lets the exports wrap to their own row on a
+                phone while close stays beside the title. */}
             <div className="dialog-actions">
               <button type="button" onClick={() => onExport("csv")} disabled={empty}>
                 Export CSV
@@ -172,18 +176,18 @@ export function SessionDialog({
               <button type="button" onClick={() => onExport("json")} disabled={empty}>
                 Export JSON
               </button>
-              <button
-                type="button"
-                ref={closeRef}
-                className="icon-button"
-                onClick={() => onClose()}
-                aria-label="Close"
-              >
-                <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false">
-                  <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.6" fill="none" />
-                </svg>
-              </button>
             </div>
+            <button
+              type="button"
+              ref={closeRef}
+              className="icon-button dialog-close"
+              onClick={() => onClose()}
+              aria-label="Close"
+            >
+              <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false">
+                <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.6" fill="none" />
+              </svg>
+            </button>
           </div>
 
           <div className="totals">

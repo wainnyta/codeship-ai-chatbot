@@ -68,6 +68,21 @@ body {
   margin: 0;
   padding: 0;
   height: 100%;
+  /*
+   * Nothing may make the whole page pan sideways.
+   *
+   * One 13px overflow inside the session dialog made the entire app draggable on
+   * iOS — the header scrolled off, the composer went with it, and the only way
+   * back was to pan. A desktop browser hides this: the dialog clipped the overflow
+   * and documentElement.scrollWidth still read 375. Safari does not, because the
+   * default overflow-x is `visible` and an overflowing descendant escapes.
+   *
+   * `clip` rather than `hidden`: hidden makes this a scroll container, which
+   * silently breaks `position: sticky` in its descendants. This is a backstop and
+   * not a licence — an element that overflows is still a bug and still gets fixed,
+   * it just no longer takes the application with it.
+   */
+  overflow-x: clip;
 }
 
 body {
@@ -980,20 +995,27 @@ input {
     padding: 14px 15px 13px;
   }
 
-  /* Title plus two exports plus a close on one row does not fit a phone. The
-     title gives up its width first and the buttons tighten, because a wrapped
-     heading still reads and "Export / CSV" over two lines does not. */
+  /* Title plus two exports plus a close does not fit one phone row — measured at
+     300px of content in 287px of space, and that 13px is what made the whole app
+     draggable. Tightening the buttons was tried and does not buy 13px without
+     making them look like an afterthought, so the exports take their own row and
+     the title keeps the first one with the close control. */
+  .dialog-head {
+    flex-wrap: wrap;
+  }
+
   .dialog-head h2 {
     font-size: 17px;
   }
 
   .dialog-actions {
+    order: 3;
+    flex: 1 0 100%;
     gap: 6px;
   }
 
   .dialog-actions button {
-    padding: 6px 8px;
-    font-size: 12px;
+    flex: 1 1 auto;
     white-space: nowrap;
   }
 
@@ -1464,15 +1486,25 @@ input {
 .dialog-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 10px;
   margin-bottom: 16px;
 }
 
 .dialog-head h2 {
   margin: 0;
+  /* Takes the slack, and gives it back first. `min-width: 0` because a flex item
+     refuses to shrink below its content without it, which is what pushed the
+     export buttons past the dialog's edge. */
+  flex: 1 1 auto;
+  min-width: 0;
   font-family: var(--serif);
   font-size: 19px;
   font-weight: 600;
+}
+
+.dialog-close {
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 .dialog .icon-button {
@@ -1568,6 +1600,7 @@ input {
 .dialog-actions {
   display: flex;
   align-items: center;
+  flex: 0 1 auto;
   gap: 8px;
 }
 
