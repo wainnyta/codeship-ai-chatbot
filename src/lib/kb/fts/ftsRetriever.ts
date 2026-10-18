@@ -513,7 +513,15 @@ export class FtsRetriever implements Retriever {
     const scoped = (t: string) => roster.has(t) || this.brand.has(t);
     const corrected = literal.map((t) => corrections.get(t) ?? t);
     const topical = [...corrected, ...expansions.filter((t) => !scoped(t))];
-    const matchTerms = topical.length ? topical : [...corrected, ...expansions];
+    /**
+     * The fallback tests whether the topical terms RETRIEVE, not whether they
+     * exist. "What does NimbusStack offer" keeps one topical term after the brand
+     * name goes — `offer`, which has df 0 here — so a list-length test called it
+     * covered and searched for a word in no document. The dense arm hid that for
+     * one revision; the case is roster-3, and it is why the condition is df-based.
+     */
+    const retrieves = topical.some((t) => this.df(t) > 0);
+    const matchTerms = retrieves ? topical : [...corrected, ...expansions];
     if (matchTerms.length === 0 && idents.length === 0 && denseRanked.length === 0) {
       return { kind: "no_evidence", reason: "no_match", product, coverage: 0, corpusVersion: this.corpusVersion, semanticCoverage };
     }
