@@ -2,8 +2,6 @@
 
 An internal chatbot that answers questions about four NimbusStack products — Relay, Vault, Pulse and Ledger — using only NimbusStack's own documentation, and shows the passages each answer came from.
 
-Built for the CodeShip technical assessment.
-
 ---
 
 ## Run it
